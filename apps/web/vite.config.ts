@@ -12,6 +12,10 @@ export default defineConfig(({ mode }) => ({
             overlay: false,
         },
     },
+    preview: {
+        host: "0.0.0.0",
+        allowedHosts: "all",
+    },
     plugins: [react()],
     resolve: {
         alias: {
