@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => ({
     },
     preview: {
         host: "0.0.0.0",
-        allowedHosts: "all",
+        allowedHosts: true,
     },
     plugins: [react()],
     resolve: {
