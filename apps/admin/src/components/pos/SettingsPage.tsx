@@ -1,0 +1,359 @@
+﻿import { useState, useEffect, useRef } from "react";
+import { Store, RotateCcw, Clock, DollarSign, Bell, Shield, Receipt, Wifi, MapPin, Phone, Loader2, Save, ImagePlus, X } from "lucide-react";
+import { Button } from "@repo/ui";
+import { Input } from "@repo/ui";
+import { Label } from "@repo/ui";
+import { Switch } from "@repo/ui";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@repo/ui";
+import { toast } from "sonner";
+import { useSettings, useUpdateSettings, uploadLogoImage } from "@repo/store";
+
+const STORAGE_KEY = "zenhouse_store";
+
+const SettingsPage = () => {
+  // â”€â”€â”€ Local UI state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [orderNotifications, setOrderNotifications] = useState(true);
+  const [bookingNotifications, setBookingNotifications] = useState(true);
+  const [studioOpen, setStudioOpen] = useState("06:00");
+  const [studioClose, setStudioClose] = useState("21:00");
+
+  // â”€â”€â”€ Cafe / Receipt info (API-backed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const { data: settings, isLoading: settingsLoading } = useSettings();
+  const updateSettings = useUpdateSettings();
+
+  const [cafeName, setCafeName]             = useState("");
+  const [cafeTagline, setCafeTagline]       = useState("");
+  const [addrLine1, setAddrLine1]           = useState("");
+  const [addrLine2, setAddrLine2]           = useState("");
+  const [phone, setPhone]                   = useState("");
+  const [email, setEmail]                   = useState("");
+  const [website, setWebsite]               = useState("");
+  const [wifiName, setWifiName]             = useState("");
+  const [wifiPass, setWifiPass]             = useState("");
+  const [receiptFooter, setReceiptFooter]   = useState("");
+  const [logoUrl, setLogoUrl]               = useState("");
+  const [taxRate, setTaxRate]               = useState("10");
+  const [currency, setCurrency]             = useState("USD");
+  const [logoUploading, setLogoUploading]   = useState(false);
+  const [logoPreview, setLogoPreview]       = useState<string>("");
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // Populate form when settings load
+  useEffect(() => {
+    if (!settings) return;
+    setCafeName(settings.cafe_name ?? "");
+    setCafeTagline(settings.cafe_tagline ?? "");
+    setAddrLine1(settings.address_line1 ?? "");
+    setAddrLine2(settings.address_line2 ?? "");
+    setPhone(settings.phone ?? "");
+    setEmail(settings.email ?? "");
+    setWebsite(settings.website ?? "");
+    setWifiName(settings.wifi_name ?? "");
+    setWifiPass(settings.wifi_password ?? "");
+    setReceiptFooter(settings.receipt_footer ?? "");
+    setLogoUrl(settings.logo_url ?? "");
+    setLogoPreview(settings.logo_url ?? "");
+    setTaxRate(String(settings.tax_rate ?? 10));
+    setCurrency(settings.currency ?? "USD");
+  }, [settings]);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Show local preview immediately
+    const objectUrl = URL.createObjectURL(file);
+    setLogoPreview(objectUrl);
+    setLogoUploading(true);
+    try {
+      const publicUrl = await uploadLogoImage(file);
+      setLogoUrl(publicUrl);
+      setLogoPreview(publicUrl);
+      toast.success("Logo uploaded — click Save to apply");
+    } catch (err: any) {
+      toast.error("Logo upload failed: " + (err?.message ?? "Unknown error"));
+      setLogoPreview(logoUrl); // revert preview
+    } finally {
+      setLogoUploading(false);
+      // Reset file input so the same file can be re-selected
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  };
+
+  const handleSaveCafeInfo = async () => {
+    try {
+      await updateSettings.mutateAsync({
+        cafe_name:      cafeName,
+        cafe_tagline:   cafeTagline || null,
+        address_line1:  addrLine1 || null,
+        address_line2:  addrLine2 || null,
+        phone:          phone || null,
+        email:          email || null,
+        website:        website || null,
+        wifi_name:      wifiName || null,
+        wifi_password:  wifiPass || null,
+        receipt_footer: receiptFooter || null,
+        logo_url:       logoUrl || null,
+        tax_rate:       parseFloat(taxRate) || 10,
+        currency,
+      });
+      toast.success("Settings saved");
+    } catch {
+      toast.error("Failed to save settings");
+    }
+  };
+
+  const handleResetData = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem("zenhouse_users");
+    localStorage.removeItem("zenhouse_customer_session");
+    toast.success("All data reset to defaults. Refreshing...");
+    setTimeout(() => window.location.reload(), 1000);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-display text-xl font-semibold text-foreground">Settings</h2>
+        <p className="text-sm text-muted-foreground mt-1">Manage your store configuration</p>
+      </div>
+
+      {/* â”€â”€ Cafe & Receipt Info â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      <div className="rounded-xl border border-border bg-card p-5 space-y-5">
+        <div className="flex items-center gap-2 text-foreground">
+          <Receipt className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Cafe & Receipt Info</h3>
+          <span className="text-[10px] text-muted-foreground ml-auto uppercase tracking-widest">Appears on every receipt</span>
+        </div>
+
+        {settingsLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+          </div>
+        ) : (
+          <>
+            {/* Name + Tagline */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Store className="h-3 w-3" /> Cafe Name
+                </Label>
+                <Input value={cafeName} onChange={e => setCafeName(e.target.value)} className="h-9 text-sm" placeholder="ZenHouse Cafe" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Tagline / Description</Label>
+                <Input value={cafeTagline} onChange={e => setCafeTagline(e.target.value)} className="h-9 text-sm" placeholder="Wellness â€¢ Tea â€¢ Pilates" />
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <MapPin className="h-3 w-3" /> Address Line 1
+              </Label>
+              <Input value={addrLine1} onChange={e => setAddrLine1(e.target.value)} className="h-9 text-sm" placeholder="No. 123, Street 217, Sangkat Veal Vong" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Address Line 2</Label>
+              <Input value={addrLine2} onChange={e => setAddrLine2(e.target.value)} className="h-9 text-sm" placeholder="Khan 7 Makara, Phnom Penh, Cambodia" />
+            </div>
+
+            {/* Phone / Email / Website */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Phone className="h-3 w-3" /> Phone
+                </Label>
+                <Input value={phone} onChange={e => setPhone(e.target.value)} className="h-9 text-sm" placeholder="012-345-6789" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Email</Label>
+                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="h-9 text-sm" placeholder="hello@cafe.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Website</Label>
+                <Input value={website} onChange={e => setWebsite(e.target.value)} className="h-9 text-sm" placeholder="www.zenhouse.com" />
+              </div>
+            </div>
+
+            {/* WiFi */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Wifi className="h-3 w-3" /> WiFi Network Name
+                </Label>
+                <Input value={wifiName} onChange={e => setWifiName(e.target.value)} className="h-9 text-sm" placeholder="ZenHouse_Cafe" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">WiFi Password</Label>
+                <Input value={wifiPass} onChange={e => setWifiPass(e.target.value)} className="h-9 text-sm" placeholder="zenhouse2024" />
+              </div>
+            </div>
+
+            {/* Receipt Footer */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Receipt Footer Message</Label>
+              <Input value={receiptFooter} onChange={e => setReceiptFooter(e.target.value)} className="h-9 text-sm" placeholder="Thank you for your visit!" />
+              <p className="text-[10px] text-muted-foreground">Shown as *** message *** at the bottom of the receipt.</p>
+            </div>
+
+            {/* Logo Upload */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Logo</Label>
+              <div className="flex items-center gap-4">
+                {/* Preview box */}
+                <div className="h-20 w-20 rounded-xl border-2 border-dashed border-border bg-muted/30 flex items-center justify-center overflow-hidden shrink-0 relative">
+                  {logoPreview ? (
+                    <>
+                      <img src={logoPreview} alt="Logo" className="h-full w-full object-contain p-1" />
+                      <button
+                        type="button"
+                        onClick={() => { setLogoPreview(""); setLogoUrl(""); }}
+                        className="absolute top-0.5 right-0.5 bg-background rounded-full p-0.5 shadow border border-border opacity-70 hover:opacity-100"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </>
+                  ) : (
+                    <ImagePlus className="h-6 w-6 text-muted-foreground/50" />
+                  )}
+                </div>
+                {/* Upload button */}
+                <div className="space-y-1.5">
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    className="hidden"
+                    onChange={handleLogoUpload}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    disabled={logoUploading}
+                    onClick={() => logoInputRef.current?.click()}
+                  >
+                    {logoUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+                    {logoUploading ? "Uploading…" : "Upload Logo"}
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground">PNG, JPG, WebP or SVG. Shown at top of receipt.</p>
+                  <p className="text-[10px] text-muted-foreground">Leave empty to use the default logo.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Tax + Currency */}
+            <div className="grid grid-cols-2 gap-4 pt-1 border-t border-border">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <DollarSign className="h-3 w-3" /> Tax Rate (%)
+                </Label>
+                <Input type="number" value={taxRate} onChange={e => setTaxRate(e.target.value)} className="h-9 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Currency</Label>
+                <Input value={currency} onChange={e => setCurrency(e.target.value)} className="h-9 text-sm" />
+              </div>
+            </div>
+
+            <Button onClick={handleSaveCafeInfo} disabled={updateSettings.isPending} className="gap-2">
+              {updateSettings.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              Save Cafe Info
+            </Button>
+          </>
+        )}
+      </div>
+
+      {/* â”€â”€ Studio Hours â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+        <div className="flex items-center gap-2 text-foreground">
+          <Clock className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Studio Hours</h3>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Opening Time</Label>
+            <Input type="time" value={studioOpen} onChange={e => setStudioOpen(e.target.value)} className="h-9 text-sm" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Closing Time</Label>
+            <Input type="time" value={studioClose} onChange={e => setStudioClose(e.target.value)} className="h-9 text-sm" />
+          </div>
+        </div>
+      </div>
+
+      {/* â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+        <div className="flex items-center gap-2 text-foreground">
+          <Bell className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Notifications</h3>
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-foreground">Email Notifications</p>
+              <p className="text-xs text-muted-foreground">Receive email alerts for new activity</p>
+            </div>
+            <Switch checked={emailNotifications} onCheckedChange={setEmailNotifications} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-foreground">Order Alerts</p>
+              <p className="text-xs text-muted-foreground">Get notified for new orders</p>
+            </div>
+            <Switch checked={orderNotifications} onCheckedChange={setOrderNotifications} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-foreground">Booking Alerts</p>
+              <p className="text-xs text-muted-foreground">Get notified for class bookings</p>
+            </div>
+            <Switch checked={bookingNotifications} onCheckedChange={setBookingNotifications} />
+          </div>
+        </div>
+      </div>
+
+      {/* â”€â”€ Danger Zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      <div className="rounded-xl border border-destructive/30 bg-card p-5 space-y-4">
+        <div className="flex items-center gap-2 text-destructive">
+          <Shield className="h-4 w-4" />
+          <h3 className="text-sm font-semibold">Danger Zone</h3>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-foreground">Reset All Data</p>
+            <p className="text-xs text-muted-foreground">Clear all products, orders, members and restore defaults</p>
+          </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" className="gap-1.5">
+                <RotateCcw className="h-3.5 w-3.5" /> Reset
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset All Data?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete all products, orders, members, class data, and user accounts. The app will be restored to its default demo state. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleResetData} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Yes, Reset Everything
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SettingsPage;

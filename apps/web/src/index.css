@@ -1,0 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Playfair+Display:wght@400;500;600;700&family=Italianno&family=Kantumruy+Pro:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 60 18% 93%;
+    /* #F1F1E9 - Zen House Soft Mist */
+    --foreground: 95 15% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 150 10% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 150 10% 15%;
+
+    --primary: 95 21% 58%;
+    /* #90A97E - Zen House Sage */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 60 15% 88%;
+    --secondary-foreground: 95 15% 15%;
+
+    --muted: 60 10% 90%;
+    --muted-foreground: 95 10% 45%;
+
+    --accent: 95 25% 88%;
+    --accent-foreground: 95 35% 25%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 60 12% 85%;
+    --input: 60 12% 85%;
+    --ring: 95 21% 58%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 150 10% 15%;
+    --sidebar-primary: 95 21% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 95 25% 93%;
+    --sidebar-accent-foreground: 95 35% 25%;
+    --sidebar-border: 60 15% 92%;
+    --sidebar-ring: 95 21% 58%;
+
+    /* Custom tokens */
+    --matcha: 95 21% 58%;
+    --matcha-light: 95 30% 92%;
+    --matcha-dark: 95 25% 45%;
+    --cream: 60 18% 93%;
+    --warm-gray: 30 10% 60%;
+
+    --font-sans: 'DM Sans', sans-serif;
+    --font-serif: 'Playfair Display', serif;
+    --font-accent: 'Italianno', cursive;
+    
+    font-family: var(--font-sans);
+  }
+
+  html[lang="km"] {
+    --font-sans: 'Kantumruy Pro', sans-serif;
+    --font-serif: 'Kantumruy Pro', sans-serif;
+    --font-accent: 'Kantumruy Pro', sans-serif;
+  }
+
+  .dark {
+    --background: 150 10% 8%;
+    --foreground: 40 20% 95%;
+    --card: 150 10% 12%;
+    --card-foreground: 40 20% 95%;
+    --popover: 150 10% 12%;
+    --popover-foreground: 40 20% 95%;
+    --primary: 142 35% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 150 10% 16%;
+    --secondary-foreground: 40 20% 95%;
+    --muted: 150 10% 16%;
+    --muted-foreground: 40 10% 60%;
+    --accent: 142 25% 20%;
+    --accent-foreground: 142 30% 80%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 150 10% 20%;
+    --input: 150 10% 20%;
+    --ring: 142 35% 50%;
+    --sidebar-background: 150 10% 10%;
+    --sidebar-foreground: 40 20% 95%;
+    --sidebar-primary: 142 35% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 142 25% 16%;
+    --sidebar-accent-foreground: 142 30% 80%;
+    --sidebar-border: 150 10% 18%;
+    --sidebar-ring: 142 35% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
