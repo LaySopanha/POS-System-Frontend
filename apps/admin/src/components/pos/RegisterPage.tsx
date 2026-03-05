@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useApiPosOrders, type ApiOrder, useCurrentRegisterSession, useOpenRegister, useCloseRegister, useAddRegisterCash, useRegisterSessions, useSettings, type RegisterSession } from "@repo/store";
-import { ArrowDownRight, Printer, Sun, Moon, Clock, ArrowUpRight, ArrowDownLeft, History, AlertCircle, Coins, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { ArrowDownRight, Printer, Sun, Moon, Clock, ArrowUpRight, ArrowDownLeft, History, AlertCircle, Coins, Loader2, Download, ArrowLeft, Filter, Calendar, X } from "lucide-react";
 import {
   Button,
   Input,
@@ -11,9 +11,14 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter
+  DialogFooter,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Calendar as CalendarComponent,
 } from "@repo/ui";
 import { cn } from "@repo/ui";
+import { format } from "date-fns";
 
 type ShiftType = "morning" | "afternoon";
 
@@ -21,7 +26,6 @@ const SHIFTS = [
   {
     type: "morning" as ShiftType,
     label: "Morning Shift",
-    time: "06:00 – 14:00",
     icon: Sun,
     defaultStart: "06:00",
     defaultEnd: "14:00",
@@ -32,7 +36,6 @@ const SHIFTS = [
   {
     type: "afternoon" as ShiftType,
     label: "Afternoon / Evening",
-    time: "14:00 – 22:00",
     icon: Moon,
     defaultStart: "14:00",
     defaultEnd: "22:00",
@@ -49,14 +52,19 @@ const RegisterPage = ({ userName = "" }: { userName?: string }) => {
   const openRegister    = useOpenRegister();
   const closeRegister   = useCloseRegister();
   const addCash         = useAddRegisterCash();
-  const { data: historyData } = useRegisterSessions();
 
   // Opening fields
   const [selectedShift, setSelectedShift] = useState<ShiftType>("morning");
   const [shiftStart, setShiftStart] = useState("06:00");
   const [shiftEnd, setShiftEnd] = useState("14:00");
   const [inputBalance, setInputBalance] = useState("");
-  const [showHistory, setShowHistory] = useState(false);
+  const [view, setView] = useState<"register" | "sessions">("register");
+  const [sessionShiftFilter, setSessionShiftFilter] = useState<"all" | "morning" | "afternoon">("all");
+  const [sessionStatusFilter, setSessionStatusFilter] = useState<"all" | "open" | "closed">("all");
+  const [sessionDateFrom, setSessionDateFrom] = useState<string | undefined>(undefined);
+  const [sessionDateTo, setSessionDateTo] = useState<string | undefined>(undefined);
+
+  const { data: historyData, isLoading: sessionsLoading } = useRegisterSessions(1, sessionDateFrom, sessionDateTo);
 
   // Running fields
   const [inputActualCash, setInputActualCash] = useState("");
@@ -160,9 +168,6 @@ const RegisterPage = ({ userName = "" }: { userName?: string }) => {
   const printShiftReport = () => {
     const shiftType = session?.shift_type;
     const shiftLabel = shiftType ? SHIFTS.find(s => s.type === shiftType)?.label : "N/A";
-
-    // Calculate category breakdown if possible or just more detail
-    const cashEntryList = session?.cash_entries ?? [];
 
     const sCafeName = settings?.cafe_name     ?? "ZenHouse Cafe";
     const sTagline  = settings?.cafe_tagline  ?? "Wellness \u2022 Tea \u2022 Pilates";
@@ -311,7 +316,7 @@ const RegisterPage = ({ userName = "" }: { userName?: string }) => {
       </div>
       <div style="background: #f9fafb; padding: 16px; border-radius: 8px;">
         <p style="color: #6b7280; text-transform: uppercase; font-size: 10px; font-weight: 700; margin-bottom: 4px;">Session Timeline</p>
-        <p class="font-bold" style="font-size: 14px;">${session?.opened_at ? new Date(session.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'} – ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+        <p class="font-bold" style="font-size: 14px;">${session?.opened_at ? new Date(session.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'} — ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
       </div>
     </div>
 
@@ -559,6 +564,277 @@ const RegisterPage = ({ userName = "" }: { userName?: string }) => {
     ? SHIFTS.find(s => s.type === session.shift_type)
     : null;
 
+  /* ── Sessions Screen Logic ── */
+  const allSessions: RegisterSession[] = historyData?.data ?? [];
+  const filteredSessions = allSessions.filter((s: RegisterSession) => {
+    if (sessionShiftFilter !== "all" && s.shift_type !== sessionShiftFilter) return false;
+    if (sessionStatusFilter !== "all" && s.status !== sessionStatusFilter) return false;
+    return true;
+  });
+
+  const sessionTotals = filteredSessions.reduce(
+    (acc: { cashSales: number; digitalSales: number }, s: RegisterSession) => ({
+      cashSales: acc.cashSales + (s.cash_sales ?? 0),
+      digitalSales: acc.digitalSales + (s.digital_sales ?? 0),
+    }),
+    { cashSales: 0, digitalSales: 0 }
+  );
+
+  const downloadSessionsCSV = () => {
+    const header = ["Date", "Staff", "Shift", "Opening", "Closing", "Cash Sales", "Digital Sales", "Cash In", "Cash Out", "Diff", "Status"];
+    const rows = filteredSessions.map((s: RegisterSession) => {
+      const diff = s.closing_balance != null
+        ? (s.closing_balance - (s.opening_balance + (s.cash_sales ?? 0) - (s.cash_out ?? 0))).toFixed(2)
+        : "";
+      return [
+        new Date(s.opened_at).toLocaleDateString("en-GB"),
+        s.staff_name,
+        s.shift_type,
+        s.opening_balance.toFixed(2),
+        s.closing_balance != null ? s.closing_balance.toFixed(2) : "",
+        (s.cash_sales ?? 0).toFixed(2),
+        (s.digital_sales ?? 0).toFixed(2),
+        (s.cash_in ?? 0).toFixed(2),
+        (s.cash_out ?? 0).toFixed(2),
+        diff,
+        s.status,
+      ].join(",");
+    });
+    const csv = [header.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sessions-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (view === "sessions") {
+    return (
+      <div className="space-y-5">
+        {/* Sessions Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" className="gap-2" onClick={() => setView("register")}>
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </Button>
+            <div>
+              <h2 className="font-display text-xl font-bold text-foreground">Session History</h2>
+              <p className="text-sm text-muted-foreground">{filteredSessions.length} session{filteredSessions.length !== 1 ? "s" : ""}</p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" className="gap-2" onClick={downloadSessionsCSV} disabled={filteredSessions.length === 0}>
+            <Download className="w-4 h-4" />
+            Export CSV
+          </Button>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+
+          {/* Date range pickers */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2 h-8 px-3 text-[11px] font-bold border-border hover:border-primary/50 transition-colors">
+                <Calendar className="h-3.5 w-3.5 text-primary" />
+                {sessionDateFrom ? format(new Date(sessionDateFrom + "T00:00:00"), "MMM d, yyyy") : "From"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={sessionDateFrom ? new Date(sessionDateFrom + "T00:00:00") : undefined}
+                onSelect={(d) => d && setSessionDateFrom(format(d, "yyyy-MM-dd"))}
+                disabled={(d) => d > new Date()}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2 h-8 px-3 text-[11px] font-bold border-border hover:border-primary/50 transition-colors">
+                <Calendar className="h-3.5 w-3.5 text-primary" />
+                {sessionDateTo ? format(new Date(sessionDateTo + "T00:00:00"), "MMM d, yyyy") : "To"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={sessionDateTo ? new Date(sessionDateTo + "T00:00:00") : undefined}
+                onSelect={(d) => d && setSessionDateTo(format(d, "yyyy-MM-dd"))}
+                disabled={(d) => d > new Date() || (sessionDateFrom ? d < new Date(sessionDateFrom + "T00:00:00") : false)}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+
+          {(sessionDateFrom || sessionDateTo) && (
+            <button
+              onClick={() => { setSessionDateFrom(undefined); setSessionDateTo(undefined); }}
+              className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border border-border text-muted-foreground hover:bg-muted/40 transition-colors"
+            >
+              <X className="w-3 h-3" /> Clear dates
+            </button>
+          )}
+
+          <span className="w-px h-4 bg-border mx-0.5" />
+
+          {(["all", "morning", "afternoon"] as const).map(opt => (
+            <button
+              key={opt}
+              onClick={() => setSessionShiftFilter(opt)}
+              className={cn(
+                "px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest border transition-colors",
+                sessionShiftFilter === opt
+                  ? opt === "morning"
+                    ? "bg-amber-100 border-amber-300 text-amber-700"
+                    : opt === "afternoon"
+                      ? "bg-indigo-100 border-indigo-300 text-indigo-700"
+                      : "bg-foreground text-background border-foreground"
+                  : "bg-transparent border-border text-muted-foreground hover:bg-muted/40"
+              )}
+            >
+              {opt === "all" ? "All Shifts" : opt === "morning" ? "Morning" : "Afternoon"}
+            </button>
+          ))}
+          <span className="w-px h-4 bg-border mx-1" />
+          {(["all", "open", "closed"] as const).map(opt => (
+            <button
+              key={opt}
+              onClick={() => setSessionStatusFilter(opt)}
+              className={cn(
+                "px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest border transition-colors",
+                sessionStatusFilter === opt
+                  ? opt === "open"
+                    ? "bg-green-100 border-green-300 text-green-700"
+                    : opt === "closed"
+                      ? "bg-muted border-border text-foreground"
+                      : "bg-foreground text-background border-foreground"
+                  : "bg-transparent border-border text-muted-foreground hover:bg-muted/40"
+              )}
+            >
+              {opt === "all" ? "All Status" : opt}
+            </button>
+          ))}
+        </div>
+
+        {/* Summary Stats */}
+        {filteredSessions.length > 0 && (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-border bg-card px-4 py-3">
+              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Sessions</p>
+              <p className="text-2xl font-display font-bold mt-0.5">{filteredSessions.length}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card px-4 py-3">
+              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Cash Sales</p>
+              <p className="text-2xl font-display font-bold mt-0.5">${sessionTotals.cashSales.toFixed(2)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card px-4 py-3">
+              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Digital Sales</p>
+              <p className="text-2xl font-display font-bold mt-0.5">${sessionTotals.digitalSales.toFixed(2)}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Session Table */}
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          {/* Column headers */}
+          <div className="flex items-center px-5 py-2.5 bg-muted/50 border-b border-border">
+            <div className="flex-1 min-w-0 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Staff / Shift</div>
+            <div className="w-[84px] text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground shrink-0">Opening</div>
+            <div className="w-[84px] text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground shrink-0">Closing</div>
+            <div className="w-[76px] text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground shrink-0">Cash</div>
+            <div className="w-[84px] text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground shrink-0">Digital</div>
+            <div className="w-[72px] text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground shrink-0">Diff</div>
+            <div className="w-[76px] text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground shrink-0">Status</div>
+          </div>
+
+          {/* Rows */}
+          <div className="divide-y divide-border">
+            {sessionsLoading ? (
+              <div className="p-4 space-y-3">
+                {[...Array(4)].map((_, i) => (
+                  <Skeleton key={i} className="h-14 w-full rounded-xl" />
+                ))}
+              </div>
+            ) : filteredSessions.length === 0 && (
+              <p className="py-12 text-center text-sm text-muted-foreground opacity-50">No sessions found.</p>
+            )}
+            {filteredSessions.map((s: RegisterSession) => {
+              const shiftMeta = SHIFTS.find(sh => sh.type === s.shift_type);
+              const ShiftIcon = shiftMeta?.icon ?? Sun;
+              const diff = s.closing_balance != null
+                ? s.closing_balance - (s.opening_balance + (s.cash_sales ?? 0) - (s.cash_out ?? 0))
+                : null;
+              const isMorning = s.shift_type === "morning";
+
+              return (
+                <div
+                  key={s.id}
+                  className={cn(
+                    "flex items-center px-5 py-3.5 hover:bg-muted/20 transition-colors",
+                    isMorning ? "border-l-2 border-l-amber-400" : "border-l-2 border-l-indigo-400"
+                  )}
+                >
+                  {/* Left: identity */}
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className={cn("h-8 w-8 rounded-full flex items-center justify-center border shrink-0", shiftMeta?.bg)}>
+                      <ShiftIcon className={cn("w-4 h-4", shiftMeta?.color)} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{s.staff_name}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {new Date(s.opened_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        {" · "}{s.shift_start_time}–{s.shift_end_time}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Fixed-width data columns */}
+                  <div className="w-[84px] text-right shrink-0">
+                    <p className="text-sm font-mono font-semibold">${s.opening_balance.toFixed(2)}</p>
+                  </div>
+                  <div className="w-[84px] text-right shrink-0">
+                    <p className="text-sm font-mono font-semibold">{s.closing_balance != null ? `$${s.closing_balance.toFixed(2)}` : "—"}</p>
+                  </div>
+                  <div className="w-[76px] text-right shrink-0">
+                    <p className="text-sm font-mono font-semibold">${(s.cash_sales ?? 0).toFixed(2)}</p>
+                  </div>
+                  <div className="w-[84px] text-right shrink-0">
+                    <p className="text-sm font-mono font-semibold">${(s.digital_sales ?? 0).toFixed(2)}</p>
+                  </div>
+                  <div className="w-[72px] text-right shrink-0">
+                    <p className={cn("text-sm font-mono font-semibold",
+                      diff == null ? "text-muted-foreground"
+                      : Math.abs(diff) < 0.01 ? "text-green-600"
+                      : diff < 0 ? "text-red-500"
+                      : "text-amber-600"
+                    )}>
+                      {diff != null ? `${diff >= 0 ? "+" : ""}${diff.toFixed(2)}` : "—"}
+                    </p>
+                  </div>
+                  <div className="w-[76px] flex justify-end shrink-0">
+                    <span className={cn(
+                      "text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border",
+                      s.status === "open"
+                        ? "bg-green-50 border-green-200 text-green-700"
+                        : "bg-muted border-border text-muted-foreground"
+                    )}>
+                      {s.status}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -566,21 +842,38 @@ const RegisterPage = ({ userName = "" }: { userName?: string }) => {
           <h2 className="font-display text-xl font-bold text-foreground">Register & Cash Drawer</h2>
           <p className="text-sm text-muted-foreground">Manage cash flow and shift summaries</p>
         </div>
-        {session?.status === 'open' && (
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 text-xs font-bold uppercase tracking-widest"
+            onClick={() => setView("sessions")}
+          >
+            <History className="w-3.5 h-3.5" />
+            Session History
+            {historyData?.total != null && (
+              <span className="bg-muted text-muted-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full">{historyData.total}</span>
+            )}
+          </Button>
+          {session?.status === 'open' && (
             <div className={cn(
-              "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border animate-pulse",
+              "px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border flex items-center gap-2",
               currentShiftMeta?.bg,
               currentShiftMeta?.color
             )}>
-              ● {currentShiftMeta?.label} — {session.staff_name}
+              {currentShiftMeta && <currentShiftMeta.icon className={cn("w-3 h-3", currentShiftMeta.color)} />}
+              <span>{currentShiftMeta?.label} — {session.staff_name}</span>
+              <span className="opacity-90 normal-case font-medium tracking-normal">
+                {session.shift_start_time} — {session.shift_end_time}
+                {session.opened_at && ` · Started ${new Date(session.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+              </span>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {isLoading ? (
-        /* ── LOADING SKELETON ── */
+        /* â"€â"€ LOADING SKELETON â"€â"€ */
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[...Array(4)].map((_, i) => (
@@ -608,7 +901,7 @@ const RegisterPage = ({ userName = "" }: { userName?: string }) => {
           </div>
         </div>
       ) : !session || session?.status !== 'open' ? (
-        /* ── OPEN REGISTER SCREEN ── */
+        /* â"€â"€ OPEN REGISTER SCREEN â"€â"€ */
         <div className="max-w-lg mx-auto space-y-5">
 
           {/* Shift selection */}
@@ -632,7 +925,7 @@ const RegisterPage = ({ userName = "" }: { userName?: string }) => {
                     <Icon className={cn("w-7 h-7", isSelected ? shift.color : "text-muted-foreground")} />
                     <div className="text-center">
                       <p className={cn("text-sm font-bold", isSelected ? shift.color : "")}>{shift.label}</p>
-                      <p className="text-[11px] opacity-70 mt-0.5">{shift.time}</p>
+                      <p className="text-[11px] opacity-70 mt-0.5">{isSelected ? `${shiftStart} - ${shiftEnd}` : `${shift.defaultStart} - ${shift.defaultEnd}`}</p>
                     </div>
                   </button>
                 );
@@ -693,24 +986,8 @@ const RegisterPage = ({ userName = "" }: { userName?: string }) => {
           </div>
         </div>
       ) : (
-        /* ── REGISTER OPEN SCREEN ── */
+        /* â"€â"€ REGISTER OPEN SCREEN â"€â"€ */
         <>
-          {/* Shift info banner */}
-          <div className={cn(
-            "rounded-xl border p-4 flex items-center justify-between",
-            currentShiftMeta?.bg
-          )}>
-            <div className="flex items-center gap-3">
-              {currentShiftMeta && <currentShiftMeta.icon className={cn("w-5 h-5", currentShiftMeta.color)} />}
-              <div>
-                <p className={cn("text-sm font-bold", currentShiftMeta?.color)}>{currentShiftMeta?.label}</p>
-                <p className="text-xs text-muted-foreground">
-                  {session.staff_name} · {session.shift_start_time} – {session.shift_end_time}
-                  · Started {session.opened_at ? new Date(session.opened_at).toLocaleTimeString() : ""}
-                </p>
-              </div>
-            </div>
-          </div>
 
           {/* KPI Cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1008,7 +1285,7 @@ const RegisterPage = ({ userName = "" }: { userName?: string }) => {
                   <p className="text-xs font-bold uppercase tracking-widest opacity-40">Items Summary</p>
                   {selectedActivityOrder.items.map((item, i) => (
                     <div key={i} className="flex justify-between items-center text-sm py-1 border-b border-border/50">
-                      <span className="font-medium">{item.quantity}× {item.product?.name ?? 'Unknown'}</span>
+                      <span className="font-medium">{item.quantity}Ã— {item.product?.name ?? 'Unknown'}</span>
                       <span className="font-mono">${parseFloat(item.subtotal).toFixed(2)}</span>
                     </div>
                   ))}
@@ -1048,83 +1325,6 @@ const RegisterPage = ({ userName = "" }: { userName?: string }) => {
         </DialogContent>
       </Dialog>
 
-      {/* ── Past Sessions History ── */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <button
-          className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors"
-          onClick={() => setShowHistory(h => !h)}
-        >
-          <span className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-            <History className="w-4 h-4" />
-            Past Sessions
-            {historyData?.total != null && (
-              <span className="ml-1 bg-muted text-muted-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
-                {historyData.total}
-              </span>
-            )}
-          </span>
-          {showHistory ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-        </button>
-
-        {showHistory && (
-          <div className="border-t border-border divide-y divide-border">
-            {(historyData?.data ?? []).length === 0 && (
-              <p className="py-10 text-center text-sm text-muted-foreground opacity-50">No past sessions yet.</p>
-            )}
-            {(historyData?.data ?? []).map((s: RegisterSession) => {
-              const shiftMeta = SHIFTS.find(sh => sh.type === s.shift_type);
-              const ShiftIcon = shiftMeta?.icon ?? Sun;
-              // Use server-tracked sales totals from session
-              const cashSalesTotal = s.cash_sales ?? 0;
-              const diff = s.closing_balance != null ? s.closing_balance - (s.opening_balance + s.cash_sales - s.cash_out) : null;
-
-              return (
-                <div key={s.id} className="flex items-center justify-between px-5 py-3 gap-4 hover:bg-muted/20 transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={cn("h-8 w-8 rounded-full flex items-center justify-center border shrink-0", shiftMeta?.bg)}>
-                      <ShiftIcon className={cn("w-4 h-4", shiftMeta?.color)} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold truncate">{s.staff_name}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {new Date(s.opened_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        {' · '}{s.shift_start_time}–{s.shift_end_time}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-6 shrink-0 text-right">
-                    <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Opening</p>
-                      <p className="text-sm font-mono font-bold">${s.opening_balance.toFixed(2)}</p>
-                    </div>
-                    {s.closing_balance != null && (
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Closing</p>
-                        <p className="text-sm font-mono font-bold">${s.closing_balance.toFixed(2)}</p>
-                      </div>
-                    )}
-                    {diff != null && (
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Diff</p>
-                        <p className={cn("text-sm font-mono font-bold", Math.abs(diff) < 0.01 ? "text-green-600" : "text-red-500")}>
-                          {diff >= 0 ? '+' : ''}{diff.toFixed(2)}
-                        </p>
-                      </div>
-                    )}
-                    <span className={cn(
-                      "text-[10px] font-bold uppercase px-2 py-1 rounded-full border",
-                      s.status === 'open' ? "bg-green-50 border-green-200 text-green-700" : "bg-muted border-border text-muted-foreground"
-                    )}>
-                      {s.status}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
     </div>
   );
 };

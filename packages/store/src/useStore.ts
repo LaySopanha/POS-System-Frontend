@@ -41,7 +41,7 @@ interface Store {
   };
 }
 
-const STORAGE_KEY = "zenhouse_store_v4";
+const STORAGE_KEY = "zenhouse_store_v7";
 
 function loadStore(): Store {
   try {
@@ -331,6 +331,30 @@ export function addMember(member: Customer) {
 
 export function updateMember(id: string, updates: Partial<Customer>) {
   store = { ...store, members: store.members.map(m => m.id === id ? { ...m, ...updates } : m) };
+  emitChange();
+}
+
+export function deductMemberSession(customerId: string, classTypeId: string) {
+  store = {
+    ...store,
+    members: store.members.map(m => {
+      if (m.id !== customerId || !m.packageBalances || !classTypeId || !m.packageBalances[classTypeId]) return m;
+      const current = m.packageBalances[classTypeId];
+      if (current.sessionsLeft <= 0) return m;
+
+      return {
+        ...m,
+        classesAttended: (m.classesAttended || 0) + 1,
+        packageBalances: {
+          ...m.packageBalances,
+          [classTypeId]: {
+            ...current,
+            sessionsLeft: current.sessionsLeft - 1
+          }
+        }
+      };
+    })
+  };
   emitChange();
 }
 

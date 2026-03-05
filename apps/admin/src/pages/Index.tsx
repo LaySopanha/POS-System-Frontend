@@ -15,7 +15,7 @@ import SettingsPage from "@/components/pos/SettingsPage";
 import ClassesPage from "@/components/pos/ClassesPage";
 import RegisterPage from "@/components/pos/RegisterPage";
 import StaffManagement from "@/components/pos/StaffManagement";
-import { useNotifications, useCurrentRegisterSession, useApiProducts, useApiCategories, usePlaceOrder, useApiPosOrders, useSettings, type ApiProduct, type ApiProductVariant, type ApiOrder, type PosCartItem } from "@repo/store";
+import { useAdminNotifications, useCurrentRegisterSession, useApiProducts, useApiCategories, usePlaceOrder, useApiPosOrders, useSettings, type ApiProduct, type ApiProductVariant, type ApiOrder, type PosCartItem } from "@repo/store";
 import { cn, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Button, Input, Label, toast, Checkbox } from "@repo/ui";
 import { CheckCircle2, ShoppingBag, Printer, Plus, Lock } from "lucide-react";
 
@@ -69,7 +69,7 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
   const apiProducts = productsQuery.data ?? [];
   const { data: apiOrdersList } = useApiPosOrders();
   const ordersList = apiOrdersList ?? [];
-  const notificationsList = useNotifications();
+  const { data: notificationsList = [] } = useAdminNotifications();
   const session = useCurrentRegisterSession();
   const { data: settings } = useSettings();
   const isRegisterOpen = session.data?.status === 'open';
@@ -159,160 +159,18 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
     }
   };
 
-  const handlePrint = async (o: Order) => {
-    // Fetch logo as base64 so it embeds correctly in the new window
-    let logoSrc = "";
-    try {
-      const resp = await fetch("/images/zh-logo.png");
-      const blob = await resp.blob();
-      logoSrc = await new Promise<string>((res) => {
-        const reader = new FileReader();
-        reader.onload = () => res(reader.result as string);
-        reader.readAsDataURL(blob);
-      });
-    } catch {
-      // If fetch fails, skip the logo
-    }
-
-    const html = `<!DOCTYPE html>
-<html><head><title>Receipt ${o.orderNumber}</title>
-<style>
-  @page { margin: 0; size: 80mm auto; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 13px;
-    width: 302px;
-    margin: 0 auto;
-    padding: 12px 8px 24px 8px;
-    color: #000;
-    background: #fff;
-  }
-  .center { text-align: center; }
-  .bold { font-weight: bold; }
-  .line { border-top: 1px dashed #000; margin: 8px 0; }
-  .row { display: flex; justify-content: space-between; margin: 3px 0; font-size: 13px; }
-  .row-item { display: flex; justify-content: space-between; margin: 4px 0; }
-  .amount { white-space: nowrap; margin-left: 8px; flex-shrink: 0; }
-  .item-name { flex: 1; word-break: break-word; }
-  .total-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; margin: 4px 0; }
-</style></head><body>
-
-  <div class="center" style="margin-bottom:8px;">
-    ${logoSrc ? `<img src="${logoSrc}" alt="ZenHouse" style="width:60px;height:60px;object-fit:contain;margin:0 auto 4px;display:block;" />` : ""}
-    <div style="font-size:16px;font-weight:bold;letter-spacing:2px;">ZenHouse Cafe</div>
-    <div style="font-size:11px;margin-top:2px;">Wellness • Tea • Pilates</div>
-    <div style="font-size:10px;margin-top:3px;">No. 123, Street 217, Sangkat Veal Vong</div>
-    <div style="font-size:10px;">Khan 7 Makara, Phnom Penh, Cambodia</div>
-    <div style="font-size:10px;margin-top:2px;">Tel: 012-345-6789</div>
-  </div>
-
-  <div class="line"></div>
-
-  <div class="row">
-    <span>${new Date(o.createdAt).toLocaleDateString()}</span>
-    <span>${new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-  </div>
-  <div class="row">
-    <span>Order</span>
-    <span class="bold">${o.orderNumber}</span>
-  </div>
-  <div class="row">
-    <span>Type</span>
-    <span>${(o.type || 'dine-in').toUpperCase()}</span>
-  </div>
-
-  <div class="line"></div>
-
-  <div class="row" style="font-weight:bold;border-bottom:1px solid #000;padding-bottom:4px;margin-bottom:6px;">
-    <span>QTY  ITEM</span>
-    <span>PRICE</span>
-  </div>
-
-  ${o.items.map(i => `
-    <div class="row-item">
-      <span class="item-name">${i.quantity}x  ${i.name}</span>
-      <span class="amount">$${(i.price * i.quantity).toFixed(2)}</span>
-    </div>
-  `).join('')}
-
-  <div class="line"></div>
-
-  <div class="row"><span>Subtotal</span><span>$${(o.subtotal || 0).toFixed(2)}</span></div>
-  ${o.discount ? `<div class="row"><span>Discount</span><span>-$${o.discount.toFixed(2)}</span></div>` : ''}
-  <div class="row"><span>Tax (10%)</span><span>$${(o.tax || 0).toFixed(2)}</span></div>
-
-  <div class="line"></div>
-
-  <div class="total-row">
-    <span>TOTAL</span>
-    <span>$${o.total.toFixed(2)}</span>
-  </div>
-
-  <div class="line"></div>
-
-  ${o.paymentMethod === 'cash' ? `
-    <div class="row"><span>Payment</span><span>CASH</span></div>
-    <div class="row"><span>Received</span><span>$${(o.receivedAmount || 0).toFixed(2)}</span></div>
-    <div class="row bold"><span>Change</span><span>$${(o.change || 0).toFixed(2)}</span></div>
-  ` : `
-    <div class="row"><span>Payment</span><span>ABA QR</span></div>
-  `}
-
-  <div class="line"></div>
-
-  <div class="center" style="margin-top:10px;">
-    <div style="font-size:13px;">*** Thank you for your visit! ***</div>
-    <div style="font-size:11px;margin-top:4px;">Please come again</div>
-  </div>
-
-  <div class="line"></div>
-
-  <div class="center" style="font-size:11px;">
-    <div style="font-weight:bold;margin-bottom:3px;">FREE WIFI</div>
-    <div>Network : ZenHouse_Cafe</div>
-    <div>Password : zenhouse2024</div>
-  </div>
-
-  <div class="line"></div>
-  <div class="center" style="font-size:10px;">Customer Copy</div>
-
-</body></html>`;
-
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentWindow?.document;
-    if (doc) {
-      doc.open();
-      doc.write(html);
-      doc.close();
-
-      setTimeout(() => {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-        setTimeout(() => document.body.removeChild(iframe), 1000);
-      }, 500);
-    }
-  };
 
 
   const pendingOrdersCount = useMemo(
-    () => ordersList.filter((o) => o.status === "confirmed" || o.status === "preparing" || o.status === "ready").length,
+    () => ordersList.filter((o) => o.status === "pending" || o.status === "preparing" || o.status === "ready").length,
     [ordersList]
   );
 
-  const unreadInboxCount = useMemo(() => notificationsList.filter((n) => !n.read).length, [notificationsList]);
+  const unreadInboxCount = notificationsList.filter((n) => !n.read).length;
 
   const filteredProducts = useMemo(() => {
     return apiProducts.filter((p) => {
-      if (p.type !== 'item') return false;
+      if (p.type === 'addon') return false;
       const matchesCat = activeCategory === "all" || p.category_id === activeCategory;
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCat && matchesSearch;
@@ -353,8 +211,10 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
     const selectedAddons = customizing.linked_addons.filter((a) => customAddons.includes(a.id));
     // Build customisation string from sugar + ice + freeform notes
     const parts = [];
-    if (customSugar !== "100%") parts.push(`Sugar: ${customSugar}`);
-    if (customIce !== "Normal") parts.push(`Ice: ${customIce}`);
+    if (customizing.type === 'drink') {
+      parts.push(`Sugar: ${customSugar}`);
+      parts.push(`Ice: ${customIce}`);
+    }
     if (customNotes.trim()) parts.push(customNotes.trim());
     const customisation = parts.join(" | ");
     addItemToCart(customizing, customVariant, selectedAddons, customisation);
@@ -423,7 +283,8 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           unreadCount={unreadInboxCount}
-          onBellClick={() => setActiveTab("inbox")}
+          notifications={notificationsList}
+          onShowAll={() => setActiveTab("inbox")}
           userRole={userRole}
           userName={userName}
         />
@@ -491,6 +352,7 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
               <CartPanel
                 items={cart}
                 onUpdateQty={updateQty}
+                onRemove={removeItem}
                 onClear={clearOrder}
                 isSubmitting={placeOrderMutation.isPending}
                 onPlaceOrder={placeOrder}
@@ -539,7 +401,8 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
               </div>
             )}
 
-            {/* Sugar level */}
+            {/* Sugar level — drinks only */}
+            {customizing?.type === 'drink' && (
             <div>
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sugar Level</Label>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -559,8 +422,10 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
                 ))}
               </div>
             </div>
+            )}
 
-            {/* Ice level */}
+            {/* Ice level — drinks only */}
+            {customizing?.type === 'drink' && (
             <div>
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ice Level</Label>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -580,6 +445,7 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
                 ))}
               </div>
             </div>
+            )}
 
             {/* Add-ons */}
             {customizing && customizing.linked_addons.length > 0 && (
@@ -655,9 +521,15 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
 
             <div className="space-y-2 mb-4">
               {lastPlacedOrder?.items.map((item, i) => (
-                <div key={i} className="flex justify-between text-xs">
-                  <span>{item.quantity}x {item.product.name}</span>
-                  <span className="font-medium">${parseFloat(item.subtotal).toFixed(2)}</span>
+                <div key={i} className="flex justify-between text-xs gap-2">
+                  <span className="flex-1">
+                    {item.quantity}x {item.product.name}
+                    {item.variant && <span className="text-muted-foreground"> ({item.variant.size.name})</span>}
+                    {item.customisation && (
+                      <span className="block text-[10px] italic text-muted-foreground mt-0.5">{item.customisation}</span>
+                    )}
+                  </span>
+                  <span className="font-medium shrink-0">${parseFloat(item.subtotal).toFixed(2)}</span>
                 </div>
               ))}
               <div className="border-t border-dashed border-slate-200 pt-3 space-y-1">

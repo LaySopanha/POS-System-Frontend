@@ -1,59 +1,64 @@
-import { useState, useMemo } from "react";
-import { Inbox, CalendarCheck, ShoppingBag, UserPlus, Info, CheckCircle2, Circle, Trash2, Search } from "lucide-react";
-import { type NotificationType } from "@repo/store";
-import { useNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, setNotifications } from "@repo/store";
+import { useState } from "react";
+import { Inbox, ShoppingBag, Info, CheckCircle2, Circle, Trash2, Search, RefreshCw } from "lucide-react";
+import {
+  useAdminNotifications,
+  useMarkAdminNotificationRead,
+  useMarkAllAdminNotificationsRead,
+  useDeleteAdminNotification,
+  type AdminNotificationType,
+  type AdminNotification,
+} from "@repo/store";
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from "@repo/ui";
 import { Input } from "@repo/ui";
 
-const typeIcon: Record<NotificationType, typeof Inbox> = {
-  reservation: CalendarCheck,
+const typeIcon: Record<AdminNotificationType, typeof Inbox> = {
   order: ShoppingBag,
-  member: UserPlus,
   system: Info,
 };
 
-const typeColor: Record<NotificationType, string> = {
-  reservation: "bg-primary/15 text-primary",
+const typeColor: Record<AdminNotificationType, string> = {
   order: "bg-amber-100 text-amber-700",
-  member: "bg-blue-100 text-blue-700",
   system: "bg-muted text-muted-foreground",
 };
 
-const typeLabel: Record<NotificationType, string> = {
-  reservation: "Reservation",
+const typeLabel: Record<AdminNotificationType, string> = {
   order: "Order",
-  member: "Member",
   system: "System",
 };
 
 const InboxPage = () => {
-  const items = useNotifications();
-  const [filter, setFilter] = useState<"all" | NotificationType>("all");
+  const { data: items = [], isLoading, refetch } = useAdminNotifications();
+  const markRead = useMarkAdminNotificationRead();
+  const markAllRead = useMarkAllAdminNotificationsRead();
+  const deleteNotif = useDeleteAdminNotification();
+
+  const [filter, setFilter] = useState<"all" | AdminNotificationType>("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    return items.filter((n) => {
-      const matchType = filter === "all" || n.type === filter;
-      const matchSearch = n.title.toLowerCase().includes(search.toLowerCase()) || n.message.toLowerCase().includes(search.toLowerCase());
-      return matchType && matchSearch;
-    });
-  }, [items, filter, search]);
+  const filtered = items.filter((n) => {
+    const matchType = filter === "all" || n.type === filter;
+    const matchSearch =
+      n.title.toLowerCase().includes(search.toLowerCase()) ||
+      n.message.toLowerCase().includes(search.toLowerCase());
+    return matchType && matchSearch;
+  });
 
   const unreadCount = items.filter((n) => !n.read).length;
   const selected = items.find((n) => n.id === selectedId);
 
-  const handleSelect = (n: typeof items[0]) => {
+  const handleSelect = (n: AdminNotification) => {
     setSelectedId(n.id);
-    if (!n.read) markNotificationRead(n.id);
+    if (!n.read) markRead.mutate(n.id);
   };
 
-  const handleMarkUnread = (id: string) => {
-    setNotifications(items.map((n) => n.id === id ? { ...n, read: false } : n));
+  const handleMarkUnread = (_id: string) => {
+    // Optimistic: not supported server-side yet, just refresh
+    refetch();
   };
 
   const handleDelete = (id: string) => {
-    deleteNotification(id);
+    deleteNotif.mutate(id);
     if (selectedId === id) setSelectedId(null);
   };
 
@@ -64,11 +69,24 @@ const InboxPage = () => {
           <h2 className="font-display text-xl font-bold text-foreground">Inbox</h2>
           <p className="text-sm text-muted-foreground">{unreadCount} unread notification{unreadCount !== 1 ? "s" : ""}</p>
         </div>
-        {unreadCount > 0 && (
-          <button onClick={markAllNotificationsRead} className="text-xs font-medium text-primary hover:underline">
-            Mark all as read
+        <div className="flex items-center gap-2">
+          {unreadCount > 0 && (
+            <button
+              onClick={() => markAllRead.mutate()}
+              disabled={markAllRead.isPending}
+              className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+            >
+              Mark all as read
+            </button>
+          )}
+          <button
+            onClick={() => refetch()}
+            disabled={isLoading}
+            className="rounded-lg p-2 text-muted-foreground hover:bg-muted transition-colors"
+          >
+            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
           </button>
-        )}
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -77,7 +95,7 @@ const InboxPage = () => {
           <Input placeholder="Search inbox..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <div className="flex gap-1.5">
-          {(["all", "reservation", "order", "member", "system"] as const).map((t) => (
+          {(["all", "order", "system"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setFilter(t)}
@@ -120,7 +138,7 @@ const InboxPage = () => {
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5 truncate">{n.message}</p>
                       <p className="text-[10px] text-muted-foreground mt-1">
-                        {new Date(n.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(n.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
                   </div>
@@ -149,7 +167,7 @@ const InboxPage = () => {
                   {!selected.read ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button onClick={() => markNotificationRead(selected.id)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                        <button onClick={() => markRead.mutate(selected.id)} disabled={markRead.isPending} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50">
                           <CheckCircle2 className="h-4 w-4" />
                         </button>
                       </TooltipTrigger>
@@ -162,7 +180,7 @@ const InboxPage = () => {
                           <Circle className="h-4 w-4" />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent>Mark as unread</TooltipContent>
+                      <TooltipContent>Refresh</TooltipContent>
                     </Tooltip>
                   )}
                   <Tooltip>
@@ -179,27 +197,21 @@ const InboxPage = () => {
                 <p className="text-sm text-foreground leading-relaxed">{selected.message}</p>
               </div>
 
-              {/* Contact details */}
-              {(selected.customerName || selected.customerEmail || selected.customerPhone) && (
+              {/* Extra metadata from data payload */}
+              {selected.data && Object.keys(selected.data).length > 0 && (
                 <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contact Info</p>
-                  {selected.customerName && (
-                    <p className="text-sm text-foreground">👤 {selected.customerName}</p>
-                  )}
-                  {selected.customerEmail && (
-                    <p className="text-sm text-foreground">✉️ <a href={`mailto:${selected.customerEmail}`} className="text-primary hover:underline">{selected.customerEmail}</a></p>
-                  )}
-                  {selected.customerPhone && (
-                    <p className="text-sm text-foreground">📞 <a href={`tel:${selected.customerPhone}`} className="text-primary hover:underline">{selected.customerPhone}</a></p>
-                  )}
-                  {selected.contactMethod && selected.contactMethod !== "phone" && (
-                    <p className="text-sm text-foreground">💬 Preferred: {selected.contactMethod.charAt(0).toUpperCase() + selected.contactMethod.slice(1)}</p>
-                  )}
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Details</p>
+                  {Object.entries(selected.data).map(([key, value]) => (
+                    <p key={key} className="text-sm text-foreground">
+                      <span className="font-medium capitalize">{key.replace(/_/g, " ")}:</span>{" "}
+                      <span className="text-muted-foreground">{String(value)}</span>
+                    </p>
+                  ))}
                 </div>
               )}
 
               <p className="text-xs text-muted-foreground">
-                {new Date(selected.createdAt).toLocaleString([], { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                {new Date(selected.created_at).toLocaleString([], { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
               </p>
             </div>
           ) : (

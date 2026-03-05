@@ -95,16 +95,19 @@ export function useCloseRegister() {
 }
 
 /** Paginated list of all sessions, newest first — for the history view. */
-export function useRegisterSessions(page = 1) {
+export function useRegisterSessions(page = 1, dateFrom?: string, dateTo?: string) {
+    const params = new URLSearchParams({ page: String(page) });
+    if (dateFrom) params.set('date_from', dateFrom);
+    if (dateTo)   params.set('date_to',   dateTo);
     return useQuery({
-        queryKey: [...registerQueryKeys.list(), page],
+        queryKey: [...registerQueryKeys.list(), page, dateFrom, dateTo],
         queryFn:  () =>
             api.get<{
                 data: RegisterSession[];
                 current_page: number;
                 last_page: number;
                 total: number;
-            }>(`/pos/register?page=${page}`),
+            }>(`/pos/register?${params}`),
         staleTime: 30_000,
     });
 }

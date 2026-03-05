@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Clock, Users, Calendar, ChevronRight, AlertCircle, CheckCircle2, XCircle, UserX, ToggleLeft, ToggleRight, Plus, Pencil, UserPlus, ArrowUp, Trash2 } from "lucide-react";
-import { instructors, type ClassSlot, type Reservation } from "@repo/store";
-import { cn, Tooltip, TooltipContent, TooltipTrigger } from "@repo/ui";
+import { instructors, type ClassSlot, type Reservation, classTypes } from "@repo/store";
+import { cn } from "@repo/ui";
 import { Button } from "@repo/ui";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -14,13 +14,18 @@ import { Input } from "@repo/ui";
 import { Label } from "@repo/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui";
 import { toast } from "sonner";
-import { useClassSlots, useClosedClassIds, useReservations, toggleClassClosed, addClassSlot, updateClassSlot, addReservation, updateReservation, deleteReservation, addNotification } from "@repo/store";
+import { useClassSlots, useClosedClassIds, useReservations, toggleClassClosed, addClassSlot, updateClassSlot, addReservation, updateReservation, deleteReservation, addNotification, deductMemberSession } from "@repo/store";
+import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui";
+import { Calendar as CalendarComponent } from "@repo/ui";
+import { format } from "date-fns";
 
-const levelColors: Record<string, string> = {
-  beginner: "bg-primary/15 text-primary border-primary/30",
-  intermediate: "bg-amber-100 text-amber-700 border-amber-200",
-  advanced: "bg-rose-100 text-rose-600 border-rose-200",
-  "all-levels": "bg-blue-100 text-blue-600 border-blue-200",
+const categoryColors: Record<string, string> = {
+  reformer: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  cadillac: "bg-blue-100 text-blue-700 border-blue-200",
+  "hot-pilates": "bg-rose-100 text-rose-700 border-rose-200",
+  barre: "bg-amber-100 text-amber-700 border-amber-200",
+  "recovery-lounge": "bg-violet-100 text-violet-700 border-violet-200",
+  membership: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
 const reservationStatusConfig: Record<string, { icon: typeof CheckCircle2; className: string; label: string }> = {
@@ -32,16 +37,17 @@ const reservationStatusConfig: Record<string, { icon: typeof CheckCircle2; class
 };
 
 const emptySlotForm = {
-  name: "", instructorId: instructors[0]?.id || "", date: "2026-02-25",
+  name: "", instructorId: instructors[0]?.id || "", date: "2026-03-04",
   startTime: "09:00", endTime: "10:00", capacity: "10", price: "25",
-  level: "beginner" as const, description: "",
+  classTypeId: "reformer", description: "",
 };
 
 const ClassesPage = () => {
   const classes = useClassSlots();
   const closedClassIds = useClosedClassIds();
   const allReservations = useReservations();
-  const [selectedDate, setSelectedDate] = useState("2026-02-25");
+  const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
+  const [selectedDate, setSelectedDate] = useState(today);
   const [selectedClass, setSelectedClass] = useState<ClassSlot | null>(null);
   const [viewTab, setViewTab] = useState<"schedule" | "reservations">("schedule");
   const [showAddSlot, setShowAddSlot] = useState(false);
@@ -80,7 +86,6 @@ const ClassesPage = () => {
     waitlisted: todayClasses.reduce((s, c) => s + getWaitlisted(c.id), 0),
   }), [todayClasses, allReservations]);
 
-  const dates = ["2026-02-25", "2026-02-26", "2026-02-27"];
 
   const openAddSlot = () => {
     setSlotForm({ ...emptySlotForm, date: selectedDate });
@@ -100,7 +105,7 @@ const ClassesPage = () => {
       capacity: parseInt(slotForm.capacity) || 10,
       status: "upcoming",
       price: parseFloat(slotForm.price) || 25,
-      level: slotForm.level as ClassSlot["level"],
+      classTypeId: slotForm.classTypeId,
       description: slotForm.description,
     });
     setShowAddSlot(false);
@@ -117,7 +122,7 @@ const ClassesPage = () => {
       endTime: cls.endTime,
       capacity: String(cls.capacity),
       price: String(cls.price),
-      level: cls.level as "beginner",
+      classTypeId: cls.classTypeId,
       description: cls.description,
     });
     setEditSlot(cls);
@@ -134,7 +139,7 @@ const ClassesPage = () => {
       endTime: editForm.endTime,
       capacity: parseInt(editForm.capacity) || 10,
       price: parseFloat(editForm.price) || 25,
-      level: editForm.level as ClassSlot["level"],
+      classTypeId: editForm.classTypeId,
       description: editForm.description,
     });
     setEditSlot(null);
@@ -144,6 +149,10 @@ const ClassesPage = () => {
 
   // Attendee management
   const handleMarkStatus = (resId: string, status: Reservation["status"]) => {
+    const res = allReservations.find(r => r.id === resId);
+    if (status === "attended" && res && selectedClass) {
+      deductMemberSession(res.customerId, selectedClass.classTypeId);
+    }
     updateReservation(resId, { status });
     toast.success(`Marked as ${status}`);
   };
@@ -235,43 +244,42 @@ const ClassesPage = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex gap-1.5">
-          {(["schedule", "reservations"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setViewTab(tab)}
-              className={cn(
-                "rounded-full px-4 py-1.5 text-xs font-medium transition-colors border",
-                viewTab === tab
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card text-muted-foreground border-border hover:bg-muted"
-              )}
-            >
-              {tab === "schedule" ? "Class Schedule" : "Reservations"}
-            </button>
-          ))}
+            {(["schedule", "reservations"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setViewTab(tab)}
+                className={cn(
+                  "rounded-full px-4 py-1.5 text-xs font-medium transition-colors border",
+                  viewTab === tab
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-card text-muted-foreground border-border hover:bg-muted"
+                )}
+              >
+                {tab === "schedule" ? "Class Schedule" : "Reservations"}
+              </button>
+            ))}
           </div>
           <Button size="sm" onClick={openAddSlot} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" /> Add Timeslot
           </Button>
         </div>
-        <div className="flex gap-1.5">
-          {dates.map((d) => {
-            const date = new Date(d);
-            return (
-              <button
-                key={d}
-                onClick={() => setSelectedDate(d)}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors border",
-                  selectedDate === d
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card text-muted-foreground border-border hover:bg-muted"
-                )}
-              >
-                {date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2 h-9 px-4 font-medium border-border hover:border-primary/50 transition-colors">
+                <Calendar className="h-4 w-4 text-primary" />
+                {format(new Date(selectedDate), "EEEE, MMM d, yyyy")}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <CalendarComponent
+                mode="single"
+                selected={new Date(selectedDate)}
+                onSelect={(d) => d && setSelectedDate(format(d, "yyyy-MM-dd"))}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -299,9 +307,7 @@ const ClassesPage = () => {
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelectedClass(cls)}>
                   <div className="flex items-center gap-2">
                     <span className="font-display text-sm font-bold text-foreground">{cls.name}</span>
-                    <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold", levelColors[cls.level])}>
-                      {cls.level}
-                    </span>
+                    <p className="text-xs text-muted-foreground">{cls.instructor.name} · <span className={cn("rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider", categoryColors[cls.classTypeId || "reformer"])}>{(cls.classTypeId || "reformer").replace('-', ' ')}</span></p>
                     {isFull && (
                       <span className="rounded-full bg-destructive/10 border border-destructive/20 px-2 py-0.5 text-[10px] font-semibold text-destructive">FULL</span>
                     )}
@@ -402,141 +408,130 @@ const ClassesPage = () => {
             const waitlisted = classReservations.filter(r => r.status === "waitlisted");
             const others = classReservations.filter(r => r.status === "cancelled" || r.status === "no-show");
             return (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  {selectedClass.name}
-                  <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold", levelColors[selectedClass.level])}>
-                    {selectedClass.level}
-                  </span>
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">{selectedClass.description}</p>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Instructor</span><span className="font-medium text-foreground">{selectedClass.instructor.name}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Time</span><span className="font-medium text-foreground">{selectedClass.startTime}–{selectedClass.endTime}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Price</span><span className="font-medium text-foreground">${selectedClass.price.toFixed(0)}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Capacity</span><span className="font-medium text-foreground">{enrolled}/{selectedClass.capacity}</span></div>
-                  <div className="flex justify-between col-span-2">
-                    <span className="text-muted-foreground">Booking Status</span>
-                    <span className={cn("font-medium", closedClassIds.has(selectedClass.id) ? "text-destructive" : "text-primary")}>
-                      {closedClassIds.has(selectedClass.id) ? "Closed" : "Open"}
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    {selectedClass.name}
+                    <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", categoryColors[selectedClass.classTypeId])}>
+                      {selectedClass.classTypeId.replace('-', ' ')}
                     </span>
-                  </div>
-                </div>
-
-                {/* Action buttons */}
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openEditSlot(selectedClass)}>
-                    <Pencil className="h-3.5 w-3.5" /> Edit Details
-                  </Button>
-                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { setWalkInName(""); setShowWalkIn(true); }}>
-                    <UserPlus className="h-3.5 w-3.5" /> Add Walk-in
-                  </Button>
-                </div>
-
-                {/* Confirmed attendees */}
-                {confirmed.length > 0 && (
-                  <div className="border-t border-border pt-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                      Attendees ({confirmed.length})
-                    </p>
-                    <div className="space-y-1.5">
-                      {confirmed.map((r) => {
-                        const StatusIcon = reservationStatusConfig[r.status]?.icon || AlertCircle;
-                        return (
-                          <div key={r.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
-                            <span className="text-sm text-foreground">{r.customerName}</span>
-                            <div className="flex items-center gap-1.5">
-                              <button onClick={() => handleCancelBooking(r)} className="text-[10px] text-destructive hover:text-destructive/80 px-1.5 py-0.5 rounded hover:bg-destructive/10 font-medium" title="Cancel booking">
-                                Cancel
-                              </button>
-                              <button onClick={() => handleMarkStatus(r.id, "no-show")} className="text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-muted" title="Mark no-show">
-                                No-show
-                              </button>
-                              <button onClick={() => handleMarkStatus(r.id, "attended")} className="text-[10px] text-primary hover:text-primary/80 px-1.5 py-0.5 rounded hover:bg-primary/10" title="Mark attended">
-                                Attended
-                              </button>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button onClick={() => setDeleteResId(r.id)} className="text-muted-foreground hover:text-destructive p-0.5 rounded hover:bg-destructive/10">
-                                    <Trash2 className="h-3 w-3" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>Remove booking</TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </div>
-                        );
-                      })}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">{selectedClass.description}</p>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Instructor</span><span className="font-medium text-foreground">{selectedClass.instructor.name}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Time</span><span className="font-medium text-foreground">{selectedClass.startTime}–{selectedClass.endTime}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Price</span><span className="font-medium text-foreground">${selectedClass.price.toFixed(0)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Capacity</span><span className="font-medium text-foreground">{enrolled}/{selectedClass.capacity}</span></div>
+                    <div className="flex justify-between col-span-2">
+                      <span className="text-muted-foreground">Booking Status</span>
+                      <span className={cn("font-medium", closedClassIds.has(selectedClass.id) ? "text-destructive" : "text-primary")}>
+                        {closedClassIds.has(selectedClass.id) ? "Closed" : "Open"}
+                      </span>
                     </div>
                   </div>
-                )}
 
-                {/* Waitlisted */}
-                {waitlisted.length > 0 && (
-                  <div className="border-t border-border pt-3">
-                    <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2">
-                      Waitlist ({waitlisted.length})
-                    </p>
-                    <div className="space-y-1.5">
-                      {waitlisted.map((r) => (
-                        <div key={r.id} className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2">
-                          <span className="text-sm text-foreground">{r.customerName}</span>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => handlePromoteWaitlisted(r.id)}
-                              className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 px-1.5 py-0.5 rounded hover:bg-primary/10 font-medium"
-                              title="Promote to confirmed"
-                            >
-                              <ArrowUp className="h-3 w-3" /> Confirm
-                            </button>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
+                  {/* Action buttons */}
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openEditSlot(selectedClass)}>
+                      <Pencil className="h-3.5 w-3.5" /> Edit Details
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { setWalkInName(""); setShowWalkIn(true); }}>
+                      <UserPlus className="h-3.5 w-3.5" /> Add Walk-in
+                    </Button>
+                  </div>
+
+                  {/* Confirmed attendees */}
+                  {confirmed.length > 0 && (
+                    <div className="border-t border-border pt-3">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                        Attendees ({confirmed.length})
+                      </p>
+                      <div className="space-y-1.5">
+                        {confirmed.map((r) => {
+                          return (
+                            <div key={r.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
+                              <span className="text-sm text-foreground">{r.customerName}</span>
+                              <div className="flex items-center gap-1.5">
+                                <button onClick={() => handleCancelBooking(r)} className="text-[10px] text-destructive hover:text-destructive/80 px-1.5 py-0.5 rounded hover:bg-destructive/10 font-medium" title="Cancel booking">
+                                  Cancel
+                                </button>
+                                <button onClick={() => handleMarkStatus(r.id, "no-show")} className="text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-muted" title="Mark no-show">
+                                  No-show
+                                </button>
+                                <button onClick={() => handleMarkStatus(r.id, "attended")} className="text-[10px] text-primary hover:text-primary/80 px-1.5 py-0.5 rounded hover:bg-primary/10 font-bold" title="Mark attended">
+                                  Check In
+                                </button>
                                 <button onClick={() => setDeleteResId(r.id)} className="text-muted-foreground hover:text-destructive p-0.5 rounded hover:bg-destructive/10">
                                   <Trash2 className="h-3 w-3" />
                                 </button>
-                              </TooltipTrigger>
-                              <TooltipContent>Remove from waitlist</TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </div>
-                      ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Cancelled / No-shows */}
-                {others.length > 0 && (
-                  <div className="border-t border-border pt-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                      Cancelled / No-Shows ({others.length})
-                    </p>
-                    <div className="space-y-1.5">
-                      {others.map((r) => {
-                        const StatusIcon = reservationStatusConfig[r.status]?.icon || AlertCircle;
-                        return (
-                          <div key={r.id} className="flex items-center justify-between rounded-lg bg-muted/20 px-3 py-2 opacity-60">
+                  {/* Waitlisted */}
+                  {waitlisted.length > 0 && (
+                    <div className="border-t border-border pt-3">
+                      <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2">
+                        Waitlist ({waitlisted.length})
+                      </p>
+                      <div className="space-y-1.5">
+                        {waitlisted.map((r) => (
+                          <div key={r.id} className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2">
                             <span className="text-sm text-foreground">{r.customerName}</span>
-                            <div className={cn("flex items-center gap-1 text-xs font-semibold capitalize", reservationStatusConfig[r.status]?.className)}>
-                              <StatusIcon className="h-3 w-3" />
-                              {r.status}
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handlePromoteWaitlisted(r.id)}
+                                className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 px-1.5 py-0.5 rounded hover:bg-primary/10 font-medium"
+                                title="Promote to confirmed"
+                              >
+                                <ArrowUp className="h-3 w-3" /> Confirm
+                              </button>
+                              <button onClick={() => setDeleteResId(r.id)} className="text-muted-foreground hover:text-destructive p-0.5 rounded hover:bg-destructive/10">
+                                <Trash2 className="h-3 w-3" />
+                              </button>
                             </div>
                           </div>
-                        );
-                      })}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {classReservations.length === 0 && (
-                  <div className="border-t border-border pt-3">
-                    <p className="text-center text-sm text-muted-foreground py-4">No attendees yet</p>
-                  </div>
-                )}
-              </div>
-            </>
+                  {/* Cancelled / No-shows */}
+                  {others.length > 0 && (
+                    <div className="border-t border-border pt-3">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                        Cancelled / No-Shows ({others.length})
+                      </p>
+                      <div className="space-y-1.5">
+                        {others.map((r) => {
+                          const StatusIcon = reservationStatusConfig[r.status]?.icon || AlertCircle;
+                          return (
+                            <div key={r.id} className="flex items-center justify-between rounded-lg bg-muted/20 px-3 py-2 opacity-60">
+                              <span className="text-sm text-foreground">{r.customerName}</span>
+                              <div className={cn("flex items-center gap-1 text-xs font-semibold capitalize", reservationStatusConfig[r.status]?.className)}>
+                                <StatusIcon className="h-3 w-3" />
+                                {r.status}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {classReservations.length === 0 && (
+                    <div className="border-t border-border pt-3">
+                      <p className="text-center text-sm text-muted-foreground py-4">No attendees yet</p>
+                    </div>
+                  )}
+                </div>
+              </>
             );
           })()}
         </DialogContent>
@@ -594,10 +589,14 @@ const ClassesPage = () => {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Level</Label>
-                <Select value={editForm.level} onValueChange={(v) => setEditForm(f => ({ ...f, level: v as any }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{["beginner", "intermediate", "advanced", "all-levels"].map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
+                <Label>Class Category</Label>
+                <Select value={editForm.classTypeId} onValueChange={(v) => setEditForm(f => ({ ...f, classTypeId: v }))}>
+                  <SelectTrigger className="capitalize"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {classTypes.map(t => (
+                      <SelectItem key={t.id} value={t.id} className="capitalize">{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
             </div>
@@ -655,10 +654,14 @@ const ClassesPage = () => {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Level</Label>
-                <Select value={slotForm.level} onValueChange={(v) => setSlotForm(f => ({ ...f, level: v as any }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{["beginner", "intermediate", "advanced", "all-levels"].map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
+                <Label>Class Category</Label>
+                <Select value={slotForm.classTypeId} onValueChange={(v) => setSlotForm(f => ({ ...f, classTypeId: v }))}>
+                  <SelectTrigger className="capitalize"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {classTypes.map(t => (
+                      <SelectItem key={t.id} value={t.id} className="capitalize">{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
             </div>

@@ -77,7 +77,7 @@ const ProductManagement = () => {
   // ── Variant / addon draft state ──
   const [hasVariants, setHasVariants] = useState(false);
   const [selectedVariants, setSelectedVariants] = useState<SelectedVariant[]>([]);
-  const [productType, setProductType] = useState<'item' | 'addon'>('item');
+  const [productType, setProductType] = useState<'drink' | 'snack' | 'addon'>('drink');
   const [selectedAddonProductIds, setSelectedAddonProductIds] = useState<string[]>([]);
   const [editProductId, setEditProductId] = useState<string | null>(null);
   const { data: freshProduct } = useApiProduct(editProductId);
@@ -140,7 +140,7 @@ const ProductManagement = () => {
     setUploading(false);
     setHasVariants(false);
     setSelectedVariants([]);
-    setProductType('item');
+    setProductType('drink');
     setSelectedAddonProductIds([]);
     setEditProductId(null);
     setIsNewDialog(true);
@@ -195,7 +195,7 @@ const ProductManagement = () => {
 
   const closeDialog = () => {
     setEditItem(null); setIsNewDialog(false); setShowNewCat(false); setUploading(false);
-    setHasVariants(false); setSelectedVariants([]); setProductType('item'); setSelectedAddonProductIds([]); setEditProductId(null);
+    setHasVariants(false); setSelectedVariants([]); setProductType('drink'); setSelectedAddonProductIds([]); setEditProductId(null);
   };
 
   const saveItem = async () => {
@@ -256,7 +256,7 @@ const ProductManagement = () => {
       const hadVariants = editItem?.has_variants ?? false;
       const hadAddons   = (editItem?.linked_addons.length ?? 0) > 0;
       const needsVariantSync = hasVariants || hadVariants;
-      const needsAddonSync   = productType === 'item' && (selectedAddonProductIds.length > 0 || hadAddons);
+      const needsAddonSync   = productType === 'drink' && (selectedAddonProductIds.length > 0 || hadAddons);
 
       const syncs: Promise<unknown>[] = [];
       if (needsVariantSync) {
@@ -509,10 +509,14 @@ const ProductManagement = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      {product.type === 'addon' ? (
+                      {product.type === 'addon' && (
                         <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Add-on</span>
-                      ) : (
-                        <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Item</span>
+                      )}
+                      {product.type === 'drink' && (
+                        <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Drink</span>
+                      )}
+                      {product.type === 'snack' && (
+                        <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Snack</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -599,32 +603,24 @@ const ProductManagement = () => {
             {/* Product Type */}
             <div className="space-y-1.5">
               <Label>Product Type</Label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setProductType('item'); }}
-                  className={cn(
-                    "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                    productType === 'item'
-                      ? "border-primary/30 bg-primary/10 text-primary"
-                      : "border-border bg-card text-muted-foreground hover:bg-muted"
-                  )}
-                >
-                  Item
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setProductType('addon'); setHasVariants(false); setSelectedVariants([]); setSelectedAddonProductIds([]); }}
-                  className={cn(
-                    "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                    productType === 'addon'
-                      ? "border-primary/30 bg-primary/10 text-primary"
-                      : "border-border bg-card text-muted-foreground hover:bg-muted"
-                  )}
-                >
-                  Add-on
-                </button>
-              </div>
+              <Select
+                value={productType}
+                onValueChange={(val: 'drink' | 'snack' | 'addon') => {
+                  setProductType(val);
+                  if (val === 'addon') {
+                    setHasVariants(false);
+                    setSelectedVariants([]);
+                    setSelectedAddonProductIds([]);
+                  }
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="drink">Drink</SelectItem>
+                  <SelectItem value="snack">Snack</SelectItem>
+                  <SelectItem value="addon">Add-on</SelectItem>
+                </SelectContent>
+              </Select>
               {productType === 'addon' && (
                 <p className="text-xs text-muted-foreground">Add-on products are extras that can be linked to menu items (e.g. syrups, toppings).</p>
               )}
@@ -640,7 +636,7 @@ const ProductManagement = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Price ($)</Label>
-                {hasVariants && productType === 'item' ? (
+                {hasVariants && productType === 'drink' ? (
                   <div className="flex h-10 items-center rounded-md border border-border bg-muted px-3 text-xs text-muted-foreground select-none">
                     Set per variant
                   </div>
@@ -714,8 +710,8 @@ const ProductManagement = () => {
             {/* Divider */}
             <div className="border-t border-border" />
 
-            {/* ── Variants (items only) ── */}
-            {productType === 'item' && (
+            {/* ── Variants (drinks only) ── */}
+            {productType === 'drink' && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div>
@@ -791,8 +787,8 @@ const ProductManagement = () => {
             </div>
             )}
 
-            {/* ── Add-ons (items only) ── */}
-            {productType === 'item' && (() => {
+            {/* ── Add-ons (drinks only) ── */}
+            {productType === 'drink' && (() => {
               const addonProducts = allProducts.filter(p => p.type === 'addon' && p.id !== editItem?.id);
               return (
               <div className="space-y-2">

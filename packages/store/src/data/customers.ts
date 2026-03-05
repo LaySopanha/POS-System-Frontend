@@ -1,5 +1,3 @@
-export type MembershipTier = "free" | "bronze" | "silver" | "gold" | "platinum";
-
 export type MembershipStatus = "active" | "inactive" | "suspended";
 
 export interface Customer {
@@ -8,7 +6,6 @@ export interface Customer {
   email: string;
   phone: string;
   avatar?: string;
-  membership: MembershipTier;
   membershipStatus: MembershipStatus;
   totalSpent: number;
   totalOrders: number;
@@ -16,6 +13,7 @@ export interface Customer {
   joinedAt: string;
   lastVisit: string;
   notes?: string;
+  packageBalances?: Record<string, { sessionsLeft: number, expiry: string }>;
 }
 
 export const customers: Customer[] = [
@@ -24,7 +22,6 @@ export const customers: Customer[] = [
     name: "Sarah Chen",
     email: "sarah.chen@email.com",
     phone: "+1 (555) 123-4567",
-    membership: "gold",
     membershipStatus: "active",
     totalSpent: 842.50,
     totalOrders: 67,
@@ -32,26 +29,31 @@ export const customers: Customer[] = [
     joinedAt: "2025-03-15",
     lastVisit: "2026-02-25",
     notes: "Prefers oat milk. Regular morning customer.",
+    packageBalances: {
+      "reformer": { sessionsLeft: 12, expiry: "2026-06-15" },
+      "hot-pilates": { sessionsLeft: 2, expiry: "2026-04-01" }
+    }
   },
   {
     id: "c2",
     name: "James Park",
     email: "james.park@email.com",
     phone: "+1 (555) 234-5678",
-    membership: "silver",
     membershipStatus: "active",
     totalSpent: 456.00,
     totalOrders: 38,
     classesAttended: 12,
     joinedAt: "2025-06-20",
     lastVisit: "2026-02-25",
+    packageBalances: {
+      "reformer": { sessionsLeft: 5, expiry: "2026-05-20" }
+    }
   },
   {
     id: "c3",
     name: "Emily Wright",
     email: "emily.w@email.com",
     phone: "+1 (555) 345-6789",
-    membership: "platinum",
     membershipStatus: "active",
     totalSpent: 1240.00,
     totalOrders: 95,
@@ -59,13 +61,16 @@ export const customers: Customer[] = [
     joinedAt: "2025-01-10",
     lastVisit: "2026-02-25",
     notes: "VIP customer. Attends pilates 4x/week.",
+    packageBalances: {
+      "reformer": { sessionsLeft: 24, expiry: "2026-12-31" },
+      "recovery-lounge": { sessionsLeft: 8, expiry: "2026-06-30" }
+    }
   },
   {
     id: "c4",
     name: "Michael Torres",
     email: "m.torres@email.com",
     phone: "+1 (555) 456-7890",
-    membership: "bronze",
     membershipStatus: "active",
     totalSpent: 186.50,
     totalOrders: 15,
@@ -78,7 +83,6 @@ export const customers: Customer[] = [
     name: "Aisha Patel",
     email: "aisha.patel@email.com",
     phone: "+1 (555) 567-8901",
-    membership: "gold",
     membershipStatus: "active",
     totalSpent: 720.00,
     totalOrders: 52,
@@ -92,7 +96,6 @@ export const customers: Customer[] = [
     name: "Liam Nguyen",
     email: "liam.n@email.com",
     phone: "+1 (555) 678-9012",
-    membership: "silver",
     membershipStatus: "active",
     totalSpent: 390.00,
     totalOrders: 28,
@@ -105,7 +108,6 @@ export const customers: Customer[] = [
     name: "Olivia Kim",
     email: "olivia.kim@email.com",
     phone: "+1 (555) 789-0123",
-    membership: "gold",
     membershipStatus: "active",
     totalSpent: 680.00,
     totalOrders: 45,
@@ -119,7 +121,6 @@ export const customers: Customer[] = [
     name: "Daniel Russo",
     email: "d.russo@email.com",
     phone: "+1 (555) 890-1234",
-    membership: "bronze",
     membershipStatus: "inactive",
     totalSpent: 95.00,
     totalOrders: 8,

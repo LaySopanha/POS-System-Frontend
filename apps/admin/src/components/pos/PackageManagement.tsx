@@ -25,12 +25,12 @@ import {
 type Tab = "class-packages" | "memberships";
 
 type PkgForm = {
-  name: string; classTypeId: string; sessions: string; price: string;
-  pricePerClass: string; validity: string; description: string; isIntro: boolean;
+  name: string; classTypeId: string; sessions: string; totalPrice: string;
+  pricePerSession: string; validity: string; remarks: string; isIntro: boolean;
 };
 const emptyPkgForm: PkgForm = {
-  name: "", classTypeId: classTypes[0]?.id || "", sessions: "1", price: "",
-  pricePerClass: "", validity: "1 month", description: "", isIntro: false,
+  name: "", classTypeId: classTypes[0]?.id || "", sessions: "1", totalPrice: "",
+  pricePerSession: "", validity: "1 month", remarks: "", isIntro: false,
 };
 
 type MemForm = {
@@ -68,7 +68,7 @@ const PackageManagement = () => {
   const stats = useMemo(() => ({
     totalPackages: packages.length,
     totalMemberships: plans.length,
-    avgPrice: packages.length > 0 ? Math.round(packages.reduce((s, p) => s + p.price, 0) / packages.length) : 0,
+    avgPrice: packages.length > 0 ? Math.round(packages.reduce((s, p) => s + (p.totalPrice || 0), 0) / packages.length) : 0,
   }), [packages, plans]);
 
   // Package CRUD
@@ -76,28 +76,28 @@ const PackageManagement = () => {
   const openEditPkg = (pkg: ClassPackage) => {
     setPkgForm({
       name: pkg.name, classTypeId: pkg.classTypeId, sessions: String(pkg.sessions),
-      price: String(pkg.price), pricePerClass: String(pkg.pricePerClass),
-      validity: pkg.validity, description: pkg.description, isIntro: !!pkg.isIntro,
+      totalPrice: String(pkg.totalPrice), pricePerSession: String(pkg.pricePerSession),
+      validity: pkg.validity, remarks: pkg.remarks, isIntro: !!pkg.isIntro,
     });
     setEditPkg(pkg);
     setShowPkgDialog(true);
   };
   const savePkg = () => {
     const sessions = parseInt(pkgForm.sessions);
-    const price = parseFloat(pkgForm.price);
-    if (!pkgForm.name || isNaN(sessions) || isNaN(price)) return;
-    const pricePerClass = Math.round(price / sessions);
+    const totalPrice = parseFloat(pkgForm.totalPrice);
+    if (!pkgForm.name || isNaN(sessions) || isNaN(totalPrice)) return;
+    const pricePerSession = Math.round(totalPrice / sessions);
     if (editPkg) {
       updateClassPackage(editPkg.id, {
-        name: pkgForm.name, classTypeId: pkgForm.classTypeId, sessions, price,
-        pricePerClass, validity: pkgForm.validity, description: pkgForm.description, isIntro: pkgForm.isIntro,
+        name: pkgForm.name, classTypeId: pkgForm.classTypeId, sessions, totalPrice,
+        pricePerSession, validity: pkgForm.validity, remarks: pkgForm.remarks, isIntro: pkgForm.isIntro,
       });
       toast.success("Package updated");
     } else {
       addClassPackage({
         id: `pkg-${Date.now()}`, name: pkgForm.name, classTypeId: pkgForm.classTypeId,
-        sessions, price, pricePerClass, validity: pkgForm.validity,
-        description: pkgForm.description, isIntro: pkgForm.isIntro,
+        sessions, totalPrice, pricePerSession, validity: pkgForm.validity,
+        remarks: pkgForm.remarks, isIntro: pkgForm.isIntro,
       });
       toast.success("Package created");
     }
@@ -205,11 +205,11 @@ const PackageManagement = () => {
                       {pkg.isIntro && <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">INTRO</span>}
                       <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{ct?.name}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{pkg.description}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">{pkg.remarks}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-foreground">${pkg.price}</p>
-                    <p className="text-xs text-muted-foreground">${pkg.pricePerClass}/class</p>
+                    <p className="text-sm font-bold text-foreground">${pkg.totalPrice}</p>
+                    <p className="text-xs text-muted-foreground">${pkg.pricePerSession}/session</p>
                   </div>
                   <div className="text-right hidden sm:block">
                     <p className="text-xs text-muted-foreground">{pkg.validity}</p>
@@ -324,10 +324,10 @@ const PackageManagement = () => {
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5"><Label>Sessions</Label><Input type="number" value={pkgForm.sessions} onChange={e => setPkgForm(f => ({ ...f, sessions: e.target.value }))} /></div>
-              <div className="space-y-1.5"><Label>Price ($)</Label><Input type="number" value={pkgForm.price} onChange={e => setPkgForm(f => ({ ...f, price: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Total ($)</Label><Input type="number" value={pkgForm.totalPrice} onChange={e => setPkgForm(f => ({ ...f, totalPrice: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>Validity</Label><Input value={pkgForm.validity} onChange={e => setPkgForm(f => ({ ...f, validity: e.target.value }))} placeholder="2 months" /></div>
             </div>
-            <div className="space-y-1.5"><Label>Description</Label><Input value={pkgForm.description} onChange={e => setPkgForm(f => ({ ...f, description: e.target.value }))} placeholder="Package description..." /></div>
+            <div className="space-y-1.5"><Label>Remarks / Description</Label><textarea className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground" rows={2} value={pkgForm.remarks} onChange={e => setPkgForm(f => ({ ...f, remarks: e.target.value }))} placeholder="Remarks or policy details..." /></div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={pkgForm.isIntro} onChange={e => setPkgForm(f => ({ ...f, isIntro: e.target.checked }))} className="rounded" />
               Intro offer (special first-timer pricing)

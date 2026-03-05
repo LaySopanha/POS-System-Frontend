@@ -27,7 +27,7 @@ export interface ApiProductVariant {
 export interface ApiProduct {
     id: string;
     category_id: string;
-    type: 'item' | 'addon';
+    type: 'drink' | 'snack' | 'addon';
     name: string;
     description: string | null;
     image_url: string | null;
@@ -122,7 +122,7 @@ export function useApiProduct(id: string | null) {
 
 export interface CreateProductBody {
     category_id: string;
-    type?: 'item' | 'addon';
+    type?: 'drink' | 'snack' | 'addon';
     name: string;
     description?: string;
     image_url?: string;
@@ -140,7 +140,7 @@ export function useCreateProduct() {
 
 export interface UpdateProductBody {
     category_id?: string;
-    type?: 'item' | 'addon';
+    type?: 'drink' | 'snack' | 'addon';
     name?: string;
     description?: string | null;
     image_url?: string | null;

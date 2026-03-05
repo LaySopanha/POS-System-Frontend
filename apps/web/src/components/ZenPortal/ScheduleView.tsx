@@ -6,7 +6,6 @@ import { useTranslation } from "react-i18next";
 
 interface ScheduleViewProps {
     step: string;
-    selectedClassType: ClassType | null;
     handleSelectClassType: (ct: ClassType, flow: "pricing" | "schedule") => void;
     selectedDate: Date | undefined;
     setSelectedDate: (date: Date | undefined) => void;
@@ -20,7 +19,6 @@ interface ScheduleViewProps {
 
 const ScheduleView: React.FC<ScheduleViewProps> = ({
     step,
-    selectedClassType,
     handleSelectClassType,
     selectedDate,
     setSelectedDate,
@@ -37,7 +35,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
         return (
             <div className="space-y-8 pt-8 animate-fade-in">
                 <div className="text-center space-y-2">
-                    <h2 
+                    <h2
                         className="text-4xl font-normal text-foreground"
                         style={{ fontFamily: "var(--font-accent)" }}
                     >
@@ -49,13 +47,13 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                 </div>
 
                 <div className="grid gap-3">
-                    {classTypes.map((ct) => (
+                    {classTypes.filter(ct => ct.id !== "membership").map((ct) => (
                         <button
                             key={ct.id}
                             onClick={() => handleSelectClassType(ct, "schedule")}
                             className="flex items-center justify-between rounded-2xl border border-border bg-card px-6 py-5 transition-all hover:border-primary/30 hover:shadow-md active:scale-[0.98]"
                         >
-                            <span 
+                            <span
                                 className="font-display text-base font-semibold tracking-wide text-foreground uppercase"
                                 style={{ fontFamily: "var(--font-serif)" }}
                             >
@@ -75,7 +73,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                 {/* Date Selection */}
                 <section className="space-y-4">
                     <div className="text-center">
-                        <h3 
+                        <h3
                             className="text-3xl font-normal text-foreground"
                             style={{ fontFamily: "var(--font-accent)" }}
                         >
@@ -97,7 +95,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                 {selectedDate && (
                     <section className="space-y-6 animate-slide-up">
                         <div className="text-center">
-                            <h3 
+                            <h3
                                 className="text-3xl font-normal text-foreground"
                                 style={{ fontFamily: "var(--font-accent)" }}
                             >
@@ -137,7 +135,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                                                 </p>
                                             </div>
                                         </div>
-                                        
+
                                         <div className="flex items-center gap-3">
                                             {slot.isFull ? (
                                                 <span className="rounded-full bg-muted/50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -156,7 +154,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                                     </button>
                                 );
                             })}
-                            
+
                             {availableTimes.length === 0 && (
                                 <div className="py-16 text-center rounded-[2.5rem] border border-dashed border-border flex flex-col items-center bg-muted/5">
                                     <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center mb-4">

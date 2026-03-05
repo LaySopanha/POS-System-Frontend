@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Minus, Plus, ShoppingBag, Tag, Receipt, XCircle, Loader2 } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Receipt, XCircle, Trash2, Tag, Loader2 } from "lucide-react";
 import type { PosCartItem } from "@repo/store";
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from "@repo/ui";
 import { Button, Input, Label } from "@repo/ui";
@@ -7,6 +7,7 @@ import { Button, Input, Label } from "@repo/ui";
 interface CartPanelProps {
   items: PosCartItem[];
   onUpdateQty: (cartKey: string, delta: number) => void;
+  onRemove: (cartKey: string) => void;
   onClear: () => void;
   isSubmitting?: boolean;
   onPlaceOrder: (params: {
@@ -17,7 +18,7 @@ interface CartPanelProps {
   }) => Promise<void>;
 }
 
-const CartPanel = ({ items, onUpdateQty, onClear, onPlaceOrder, isSubmitting = false }: CartPanelProps) => {
+const CartPanel = ({ items, onUpdateQty, onRemove, onClear, onPlaceOrder, isSubmitting = false }: CartPanelProps) => {
   const [orderType, setOrderType] = useState<"dine_in" | "takeaway">("dine_in");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "aba">("cash");
   const [receivedAmount, setReceivedAmount] = useState("");
@@ -88,7 +89,7 @@ const CartPanel = ({ items, onUpdateQty, onClear, onPlaceOrder, isSubmitting = f
             {items.map((item) => {
               const itemKey = item.cartKey;
               const variantLabel = item.variant ? ` · ${item.variant.size.name}` : "";
-              const addonLabel = item.selectedAddons.length > 0 ? ` + ${item.selectedAddons.map(a => a.name).join(", ")}` : "";
+              const addonLabel = item.selectedAddons.length > 0 ? ` + ${item.selectedAddons.map((a: { name: string }) => a.name).join(", ")}` : "";
               return (
                 <div key={itemKey} className="group flex items-center gap-3 rounded-xl border border-transparent hover:border-border hover:bg-muted/30 p-2 transition-all">
                   {item.product.image_url ? (
@@ -127,6 +128,12 @@ const CartPanel = ({ items, onUpdateQty, onClear, onPlaceOrder, isSubmitting = f
                       <TooltipContent>Increase quantity</TooltipContent>
                     </Tooltip>
                   </div>
+                  <button
+                    onClick={() => onRemove(itemKey)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </button>
                 </div>
               );
             })}

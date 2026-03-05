@@ -1,16 +1,29 @@
+import { useState } from "react";
 import { Search, Bell, Clock } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@repo/ui";
+import { cn, Popover, PopoverContent, PopoverTrigger } from "@repo/ui";
+import type { AdminNotification } from "@repo/store";
 
 interface TopBarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   unreadCount?: number;
-  onBellClick?: () => void;
+  notifications?: AdminNotification[];
+  onShowAll?: () => void;
   userRole?: string;
   userName?: string;
 }
 
-const TopBar = ({ searchQuery, onSearchChange, unreadCount = 0, onBellClick, userRole = "staff", userName = "" }: TopBarProps) => {
+const TopBar = ({ searchQuery, onSearchChange, unreadCount = 0, notifications = [], onShowAll, userRole = "staff", userName = "" }: TopBarProps) => {
+  const timeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
+  const [panelOpen, setPanelOpen] = useState(false);
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
   const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
@@ -48,12 +61,9 @@ const TopBar = ({ searchQuery, onSearchChange, unreadCount = 0, onBellClick, use
       </div>
 
       <div className="flex items-center gap-3">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={onBellClick}
-              className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
+        <Popover open={panelOpen} onOpenChange={setPanelOpen}>
+          <PopoverTrigger asChild>
+            <button className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground">
@@ -61,9 +71,44 @@ const TopBar = ({ searchQuery, onSearchChange, unreadCount = 0, onBellClick, use
                 </span>
               )}
             </button>
-          </TooltipTrigger>
-          <TooltipContent>Notifications{unreadCount > 0 ? ` (${unreadCount} unread)` : ""}</TooltipContent>
-        </Tooltip>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-80 p-0 shadow-xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <h3 className="text-sm font-bold">Notifications</h3>
+              {unreadCount > 0 && (
+                <span className="text-[10px] bg-destructive/10 text-destructive font-bold px-2 py-0.5 rounded-full">
+                  {unreadCount} unread
+                </span>
+              )}
+            </div>
+            <div className="divide-y divide-border max-h-[360px] overflow-y-auto">
+              {notifications.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">No notifications</p>
+              ) : (
+                notifications.slice(0, 6).map((n) => (
+                  <div key={n.id} className={cn("px-4 py-3", !n.read && "bg-primary/5")}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-foreground truncate">{n.title}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                      </div>
+                      {!n.read && <span className="mt-0.5 h-2 w-2 rounded-full bg-primary shrink-0" />}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/60 mt-1.5">{timeAgo(n.created_at)}</p>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="border-t border-border px-4 py-2.5">
+              <button
+                onClick={() => { setPanelOpen(false); onShowAll?.(); }}
+                className="w-full text-center text-xs font-semibold text-primary hover:underline"
+              >
+                View all in Inbox &rarr;
+              </button>
+            </div>
+          </PopoverContent>
+        </Popover>
 
         <div className="flex items-center gap-2">
 

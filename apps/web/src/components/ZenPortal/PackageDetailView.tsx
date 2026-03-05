@@ -53,12 +53,20 @@ const PackageDetailView: React.FC<PackageDetailViewProps> = ({
                                     </li>
                                 ))
                             ) : (
-                                <li className="flex gap-3 text-sm text-muted-foreground leading-snug">
-                                    <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                                    <span>
-                                        {(item as ClassPackage).sessions === 999 ? t('unlimited') : (item as ClassPackage).sessions} {t('sessions')} {t('at_studio')}. {t('valid_for')} {(item as ClassPackage).validity}.
-                                    </span>
-                                </li>
+                                <>
+                                    <li className="flex gap-3 text-sm text-muted-foreground leading-snug">
+                                        <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                                        <span>
+                                            {(item as ClassPackage).sessions === 999 ? t('unlimited') : (item as ClassPackage).sessions} {t('sessions')} {t('at_studio')}. {t('valid_for')} {(item as ClassPackage).validity}.
+                                        </span>
+                                    </li>
+                                    {(item as ClassPackage).remarks && (
+                                        <li className="flex gap-3 text-sm text-muted-foreground leading-snug">
+                                            <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                                            <span>{(item as ClassPackage).remarks}</span>
+                                        </li>
+                                    )}
+                                </>
                             )}
                             <li className="flex gap-3 text-sm text-muted-foreground leading-snug">
                                 <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />

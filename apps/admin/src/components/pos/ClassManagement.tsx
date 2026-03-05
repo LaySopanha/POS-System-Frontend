@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Plus, Pencil, Trash2, Search, Clock, Users, Calendar } from "lucide-react";
-import { instructors, type ClassSlot } from "@repo/store";
-import { cn, Tooltip, TooltipContent, TooltipTrigger } from "@repo/ui";
+import { instructors, type ClassSlot, classTypes } from "@repo/store";
+import { cn } from "@repo/ui";
 import { Input } from "@repo/ui";
 import { Button } from "@repo/ui";
 import { Label } from "@repo/ui";
@@ -18,30 +18,32 @@ import {
 import { toast } from "sonner";
 import { useClassSlots, useReservations, addClassSlot, updateClassSlot, deleteClassSlot } from "@repo/store";
 
-const statusColors: Record<string, string> = {
-  upcoming: "bg-blue-100 text-blue-700 border-blue-200",
-  "in-progress": "bg-primary/15 text-primary border-primary/30",
-  completed: "bg-muted text-muted-foreground border-border",
-  cancelled: "bg-destructive/10 text-destructive border-destructive/20",
+const categoryColors: Record<string, string> = {
+  reformer: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  cadillac: "bg-blue-100 text-blue-700 border-blue-200",
+  "hot-pilates": "bg-rose-100 text-rose-700 border-rose-200",
+  barre: "bg-amber-100 text-amber-700 border-amber-200",
+  "recovery-lounge": "bg-violet-100 text-violet-700 border-violet-200",
+  membership: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
-const levelColors: Record<string, string> = {
-  beginner: "bg-primary/15 text-primary border-primary/30",
-  intermediate: "bg-amber-100 text-amber-700 border-amber-200",
-  advanced: "bg-rose-100 text-rose-600 border-rose-200",
-  "all-levels": "bg-blue-100 text-blue-600 border-blue-200",
+const statusColors: Record<string, string> = {
+  upcoming: "bg-blue-50 text-blue-600 border-blue-100",
+  "in-progress": "bg-emerald-50 text-emerald-600 border-emerald-100",
+  completed: "bg-slate-50 text-slate-500 border-slate-100",
+  cancelled: "bg-rose-50 text-rose-600 border-rose-100",
 };
 
 type FormData = {
   name: string; instructorId: string; date: string; startTime: string;
-  endTime: string; capacity: string; price: string; level: string;
+  endTime: string; capacity: string; price: string; classTypeId: string;
   description: string; status: string;
 };
 
 const emptyForm: FormData = {
-  name: "", instructorId: instructors[0]?.id || "", date: "2026-02-25",
+  name: "", instructorId: instructors[0]?.id || "", date: "2026-03-04",
   startTime: "09:00", endTime: "10:00", capacity: "10", price: "25",
-  level: "beginner", description: "", status: "upcoming",
+  classTypeId: "reformer", description: "", status: "upcoming",
 };
 
 const ClassManagement = () => {
@@ -70,7 +72,7 @@ const ClassManagement = () => {
     setForm({
       name: c.name, instructorId: c.instructor.id, date: c.date,
       startTime: c.startTime, endTime: c.endTime, capacity: String(c.capacity),
-      price: String(c.price), level: c.level, description: c.description, status: c.status,
+      price: String(c.price), classTypeId: c.classTypeId, description: c.description, status: c.status,
     });
     setEditItem(c);
   };
@@ -85,7 +87,7 @@ const ClassManagement = () => {
       updateClassSlot(editItem.id, {
         name: form.name, instructor, date: form.date, startTime: form.startTime,
         endTime: form.endTime, capacity: cap, price,
-        level: form.level as ClassSlot["level"], description: form.description,
+        classTypeId: form.classTypeId, description: form.description,
         status: form.status as ClassSlot["status"],
       });
       toast.success("Class updated");
@@ -95,7 +97,7 @@ const ClassManagement = () => {
         id: `cl${Date.now()}`, name: form.name, instructor, date: form.date,
         startTime: form.startTime, endTime: form.endTime, capacity: cap,
         status: form.status as ClassSlot["status"],
-        price, level: form.level as ClassSlot["level"], description: form.description,
+        price, classTypeId: form.classTypeId, description: form.description,
       };
       addClassSlot(newClass);
       toast.success("Class created");
@@ -160,66 +162,56 @@ const ClassManagement = () => {
               const enrolled = getEnrolled(cls.id);
               const waitlisted = getWaitlisted(cls.id);
               return (
-              <tr key={cls.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
-                <td className="px-4 py-3">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{cls.name}</p>
-                    <p className="text-xs text-muted-foreground">{cls.instructor.name} · <span className={cn("rounded-full border px-1.5 py-0.5 text-[10px] font-semibold", levelColors[cls.level])}>{cls.level}</span></p>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1.5 text-sm text-foreground">
-                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                    {new Date(cls.date).toLocaleDateString([], { month: "short", day: "numeric" })}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
-                    <Clock className="h-3 w-3" />{cls.startTime}–{cls.endTime}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="font-medium text-foreground">{enrolled}/{cls.capacity}</span>
-                  </div>
-                  {waitlisted > 0 && <p className="text-[10px] text-amber-600 mt-0.5">{waitlisted} waitlisted</p>}
-                </td>
-                <td className="px-4 py-3">
-                  <button onClick={() => toggleStatus(cls)} className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold cursor-pointer transition-colors", statusColors[cls.status])}>
-                    {cls.status.replace("-", " ")}
-                  </button>
-                </td>
-                <td className="px-4 py-3 text-sm font-bold text-foreground">${cls.price.toFixed(0)}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-1">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button onClick={() => openEdit(cls)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"><Pencil className="h-4 w-4" /></button>
-                      </TooltipTrigger>
-                      <TooltipContent>Edit class</TooltipContent>
-                    </Tooltip>
-                    <AlertDialog>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <AlertDialogTrigger asChild>
-                            <button className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"><Trash2 className="h-4 w-4" /></button>
-                          </AlertDialogTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent>Delete class</TooltipContent>
-                      </Tooltip>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Class</AlertDialogTitle>
-                          <AlertDialogDescription>Are you sure you want to delete "{cls.name}"? This action cannot be undone.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(cls)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </td>
-              </tr>
+                <tr key={cls.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                  <td className="px-4 py-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{cls.name}</p>
+                      <p className="text-xs text-muted-foreground">{cls.instructor.name} · <span className={cn("rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider", categoryColors[cls.classTypeId || "reformer"])}>{(cls.classTypeId || "reformer").replace('-', ' ')}</span></p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 text-sm text-foreground">
+                      <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                      {new Date(cls.date).toLocaleDateString([], { month: "short", day: "numeric" })}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                      <Clock className="h-3 w-3" />{cls.startTime}–{cls.endTime}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="font-medium text-foreground">{enrolled}/{cls.capacity}</span>
+                    </div>
+                    {waitlisted > 0 && <p className="text-[10px] text-amber-600 mt-0.5">{waitlisted} waitlisted</p>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => toggleStatus(cls)} className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold cursor-pointer transition-colors", statusColors[cls.status])}>
+                      {cls.status.replace("-", " ")}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-sm font-bold text-foreground">${cls.price.toFixed(0)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => openEdit(cls)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"><Pencil className="h-4 w-4" /></button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <button className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"><Trash2 className="h-4 w-4" /></button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Class</AlertDialogTitle>
+                            <AlertDialogDescription>Are you sure you want to delete "{cls.name}"? This action cannot be undone.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(cls)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </td>
+                </tr>
               );
             })}
           </tbody>
@@ -239,10 +231,10 @@ const ClassManagement = () => {
                   <SelectContent>{instructors.map((i) => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5"><Label>Level</Label>
-                <Select value={form.level} onValueChange={(v) => setForm((f) => ({ ...f, level: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{["beginner", "intermediate", "advanced", "all-levels"].map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
+              <div className="space-y-1.5"><Label>Class Category</Label>
+                <Select value={form.classTypeId} onValueChange={(v) => setForm((f) => ({ ...f, classTypeId: v }))}>
+                  <SelectTrigger className="capitalize"><SelectValue /></SelectTrigger>
+                  <SelectContent>{classTypes.map((t) => <SelectItem key={t.id} value={t.id} className="capitalize">{t.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>

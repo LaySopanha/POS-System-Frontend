@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   toast,
-  cn,
   registerUser,
   loginUser,
   saveCustomerSession,
@@ -19,13 +18,11 @@ import {
   useClassPackages,
   useMembershipPlans,
   useReservations,
-  classTypes,
   type ClassType,
   type ClassPackage,
   type MembershipPlan
 } from "@repo/store";
 
-import MatchaStrawberryBackground from "@/components/ZenPortal/MatchaStrawberryBackground";
 import StepHeader from "@/components/ZenPortal/StepHeader";
 import HomeView from "@/components/ZenPortal/HomeView";
 import PricingView from "@/components/ZenPortal/PricingView";
@@ -63,24 +60,42 @@ export interface CustomerAccount {
 export interface PurchasedPackage {
   id: string;
   packageName: string;
-  classTypeName?: string;
+  classTypeId?: string;
   price: number;
   sessions: number;
   sessionsUsed: number;
   validity: string;
+  remarks: string;
+  benefits?: string[];
   purchasedAt: string;
+  activatedAt?: string; // Activated on first booking
+  expiresAt?: string;
+  status: "active" | "inactive" | "expired";
 }
 
 export interface BookedClass {
   id: string;
   className: string;
+  classTypeId: string;
   date: string;
   time: string;
   instructor: string;
-  status: "confirmed" | "completed" | "cancelled";
+  description?: string;
+  status: "confirmed" | "completed" | "cancelled" | "late-cancel" | "no-show";
   bookedAt: string;
   packageId: string;
 }
+
+export interface PaymentRecord {
+  id: string;
+  amount: number;
+  date: string;
+  method: string;
+  status: "paid" | "pending";
+  items: string[];
+}
+
+export type AccountTab = "dashboard" | "packages" | "classes" | "book" | "progress" | "payments" | "profile";
 
 const ZenHome = () => {
   const location = useLocation();
@@ -141,10 +156,60 @@ const ZenHome = () => {
   // Cart / purchases - persisted in local state for simplicity in this demo portal
   const [cart, setCart] = useState<(ClassPackage | MembershipPlan)[]>([]);
   const [showCart, setShowCart] = useState(false);
-  const [purchasedPackages, setPurchasedPackages] = useState<PurchasedPackage[]>([]);
-  const [bookedClasses, setBookedClasses] = useState<BookedClass[]>([]);
+  const [purchasedPackages, setPurchasedPackages] = useState<PurchasedPackage[]>([
+    {
+      id: "pkg-1",
+      packageName: "Move 12 (Reformer)",
+      classTypeId: "reformer",
+      price: 216,
+      sessions: 12,
+      sessionsUsed: 3,
+      validity: "4 months",
+      remarks: "Non-transferrable, non-refundable, non-sharable",
+      benefits: ["50 mins duration", "Access to lockers"],
+      purchasedAt: "2026-02-15T10:00:00Z",
+      activatedAt: "2026-02-20T08:00:00Z",
+      expiresAt: "2026-06-20T08:00:00Z",
+      status: "active"
+    }
+  ]);
+  const [bookedClasses, setBookedClasses] = useState<BookedClass[]>([
+    {
+      id: "res-1",
+      className: "Group Reformer",
+      classTypeId: "reformer",
+      date: "2026-03-10",
+      time: "10:00",
+      instructor: "Sophea",
+      description: "Focus on core stability and graceful movements.",
+      status: "confirmed",
+      bookedAt: "2026-03-01T15:00:00Z",
+      packageId: "pkg-1"
+    },
+    {
+      id: "res-2",
+      className: "Cadillac Sculpt",
+      classTypeId: "cadillac",
+      date: "2026-02-28",
+      time: "09:00",
+      instructor: "Visal",
+      status: "completed",
+      bookedAt: "2026-02-20T11:00:00Z",
+      packageId: "pkg-1"
+    }
+  ]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([
+    {
+      id: "INV-001",
+      amount: 216,
+      date: "2026-02-15",
+      method: "ABA Pay",
+      status: "paid",
+      items: ["Move 12 Reformer Package"]
+    }
+  ]);
 
-  const [accountTab, setAccountTab] = useState<"packages" | "bookings">("packages");
+  const [accountTab, setAccountTab] = useState<AccountTab>("dashboard");
   const [postAuthPath, setPostAuthPath] = useState<string | null>(null);
 
   // Available times for selected class type + date
@@ -152,9 +217,9 @@ const ZenHome = () => {
     if (!selectedClassType || !selectedDate) return [];
     const dateStr = selectedDate.toISOString().split("T")[0];
     return classSlots
-      .filter((s) => s.date === dateStr && !closedClassIds.has(s.id))
-      .map((s) => {
-        const enrolled = allReservations.filter(r => r.classId === s.id && (r.status === "confirmed" || r.status === "attended")).length;
+      .filter((s: any) => s.date === dateStr && !closedClassIds.has(s.id))
+      .map((s: any) => {
+        const enrolled = allReservations.filter((r: any) => r.classId === s.id && (r.status === "confirmed" || r.status === "attended")).length;
         return {
           ...s,
           enrolled,
@@ -238,7 +303,6 @@ const ZenHome = () => {
         name: acc.name,
         email: acc.email,
         phone: acc.phone,
-        membership: "free",
         membershipStatus: "active",
         totalSpent: 0,
         totalOrders: 0,
@@ -290,72 +354,95 @@ const ZenHome = () => {
     setSelectedSlots(prev => {
       const isSelected = prev.some(s => s.id === slot.id);
       if (isSelected) return prev.filter(s => s.id !== slot.id);
-      
+
       const totalRequested = prev.length + 1;
-      // We check sessionsRemaining only if logged in and has packages
-      // If not, we'll check later in handleCompleteBooking
       if (customer && sessionsRemaining > 0 && totalRequested > sessionsRemaining) {
-          toast.error(`You only have ${sessionsRemaining} sessions left.`);
-          return prev;
+        toast.error(`You only have ${sessionsRemaining} sessions left.`);
+        return prev;
       }
       return [...prev, slot];
     });
   };
 
   const handleCompleteBooking = () => {
-      if (selectedSlots.length === 0) return;
-      if (!customer) { requireAuth("/book"); return; }
-      if (activePackages.length === 0) {
-          toast.error("Please purchase a package first.");
-          navigate("/pricing");
-          return;
-      }
-      if (selectedSlots.length > sessionsRemaining) {
-          toast.error(`You only have ${sessionsRemaining} sessions left.`);
-          return;
-      }
+    if (selectedSlots.length === 0) return;
+    if (!customer) { requireAuth("/book"); return; }
 
-      const newBookings: BookedClass[] = selectedSlots.map(slot => ({
-          id: `bk-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-          className: slot.name,
-          date: selectedDate!.toISOString().split("T")[0],
-          time: `${slot.startTime} – ${slot.endTime}`,
-          instructor: slot.instructor.name,
-          status: "confirmed",
-          bookedAt: new Date().toISOString(),
-          packageId: activePackages[0].id,
-      }));
+    // 1. Identify valid package with type matching logic
+    const activePkg = purchasedPackages.find(p => {
+      const isMembership = p.packageName.toLowerCase().includes("membership") || p.classTypeId === "membership";
+      const typeMatches = p.classTypeId === selectedClassType?.id;
+      const hasSessions = p.sessions - p.sessionsUsed >= selectedSlots.length;
+      const notExpired = p.status !== "expired";
 
-      setBookedClasses(prev => [...prev, ...newBookings]);
-      
-      // Deduct sessions
-      let sessionsToDeduct = selectedSlots.length;
-      setPurchasedPackages(prev => prev.map(pkg => {
-          if (sessionsToDeduct <= 0) return pkg;
-          const available = pkg.sessions - pkg.sessionsUsed;
-          const deduct = Math.min(available, sessionsToDeduct);
-          sessionsToDeduct -= deduct;
-          return { ...pkg, sessionsUsed: pkg.sessionsUsed + deduct };
-      }));
+      // Members can book anything, others must match type
+      return (isMembership || typeMatches) && hasSessions && notExpired;
+    });
 
-      // Add reservations to "store"
-      selectedSlots.forEach(slot => {
-          addReservation({
-              id: `res-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-              classId: slot.id,
-              className: slot.name,
-              customerName: customer!.name,
-              customerId: customer!.id,
-              date: selectedDate!.toISOString().split("T")[0],
-              time: slot.startTime,
-              status: "confirmed",
-              bookedAt: new Date().toISOString(),
-          });
+    if (!activePkg) {
+      toast.error(`You don't have enough active sessions for ${selectedClassType?.name}.`);
+      setAccountTab("packages");
+      return;
+    }
+
+    // 2. Logic: Package activates on first booking
+    let updatedPkgs = [...purchasedPackages];
+    let activatedAt = activePkg.activatedAt;
+    let expiresAtStr = activePkg.expiresAt;
+
+    if (!activePkg.activatedAt) {
+      activatedAt = new Date().toISOString();
+      const validityNum = parseInt(activePkg.validity) || 1;
+      const d = new Date();
+      d.setMonth(d.getMonth() + validityNum);
+      expiresAtStr = d.toISOString();
+    }
+
+    // Update the package session usage and activation
+    updatedPkgs = updatedPkgs.map(p => p.id === activePkg.id ? {
+      ...p,
+      sessionsUsed: p.sessionsUsed + selectedSlots.length,
+      activatedAt,
+      expiresAt: expiresAtStr,
+      status: "active" as const
+    } : p);
+
+    // 3. Create Bookings
+    const newBookings: BookedClass[] = selectedSlots.map((slot, idx) => ({
+      id: `booking-${Date.now()}-${idx}`,
+      className: slot.name,
+      classTypeId: selectedClassType?.id || "",
+      date: slot.date,
+      time: slot.startTime,
+      instructor: slot.instructor.name,
+      description: slot.description,
+      status: "confirmed" as const,
+      bookedAt: new Date().toISOString(),
+      packageId: activePkg.id,
+    }));
+
+    setBookedClasses([...newBookings, ...bookedClasses]);
+    setPurchasedPackages(updatedPkgs);
+
+    // 4. Update the global reservations store
+    selectedSlots.forEach(slot => {
+      addReservation({
+        id: `res-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        classId: slot.id,
+        className: slot.name,
+        customerName: customer!.name,
+        customerId: customer!.id,
+        date: slot.date,
+        time: slot.startTime,
+        status: "confirmed",
+        bookedAt: new Date().toISOString(),
       });
+    });
 
-      toast.success(`${selectedSlots.length} sessions booked!`);
-      setSelectedSlots([]);
-      navigate("/success");
+    setSelectedSlots([]);
+    setSelectedDate(undefined);
+    navigate("/success");
+    toast.success(`${selectedSlots.length} sessions booked!`);
   };
 
   const addToCart = (item: ClassPackage | MembershipPlan) => {
@@ -374,21 +461,38 @@ const ZenHome = () => {
       navigate("/auth");
       return;
     }
+
     const newPurchases: PurchasedPackage[] = cart.map((item) => {
       const isPackage = "classTypeId" in item;
-      const ct = isPackage ? classTypes.find((c) => c.id === (item as ClassPackage).classTypeId) : null;
       return {
         id: `pkg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         packageName: item.name,
-        classTypeName: ct?.name,
+        classTypeId: isPackage ? (item as ClassPackage).classTypeId : "membership",
         price: item.price,
-        sessions: isPackage ? (item as ClassPackage).sessions : 999,
+        sessions: isPackage ? (item as ClassPackage).sessions : (item.id.includes("membership") ? 999 : 10), // membership unlimited logic
         sessionsUsed: 0,
         validity: item.validity,
+        remarks: isPackage ? (item as ClassPackage).remarks : (item as MembershipPlan).description,
+        benefits: isPackage ? [] : (item as MembershipPlan).includes,
         purchasedAt: new Date().toISOString(),
+        status: "inactive" as const
       };
     });
+
     setPurchasedPackages((prev) => [...prev, ...newPurchases]);
+
+    // Add payment record
+    const totalAmount = cart.reduce((s, i) => s + i.price, 0);
+    const newPayment: PaymentRecord = {
+      id: `INV-${Date.now()}`,
+      amount: totalAmount,
+      date: new Date().toISOString().split("T")[0],
+      method: "ABA Pay",
+      status: "paid",
+      items: cart.map(i => i.name)
+    };
+    setPayments([newPayment, ...payments]);
+
     setCart([]);
     setShowCart(false);
     navigate("/success");
@@ -397,7 +501,7 @@ const ZenHome = () => {
       id: `notif-${Date.now()}`,
       type: "reservation",
       title: "New Purchase",
-      message: `${customer.name} bought packages`,
+      message: `${customer.name} bought ${cart.length} item(s)`,
       read: false,
       createdAt: new Date().toISOString(),
     });
@@ -421,10 +525,16 @@ const ZenHome = () => {
 
   const handleCancelBooking = (bookingId: string) => {
     const booking = bookedClasses.find(b => b.id === bookingId);
-    if (booking) {
+    if (!booking) return;
+
+    if (canReschedule(booking)) {
       setBookedClasses(prev => prev.map(b => b.id === bookingId ? { ...b, status: "cancelled" } : b));
-      setPurchasedPackages(prev => prev.map(p => p.id === booking.packageId ? { ...p, sessionsUsed: Math.max(0, p.sessionsUsed - 1) } : p));
-      toast.success("Booking cancelled");
+      // Refund session
+      setPurchasedPackages(prev => prev.map(p => p.id === booking.packageId ? { ...p, sessionsUsed: p.sessionsUsed - 1 } : p));
+      toast.success("Booking cancelled and session refunded.");
+    } else {
+      setBookedClasses(prev => prev.map(b => b.id === bookingId ? { ...b, status: "late-cancel" } : b));
+      toast.warning("Late cancellation: session balance will not be refunded.");
     }
   };
 
@@ -448,8 +558,7 @@ const ZenHome = () => {
   };
 
   return (
-    // <MatchaStrawberryBackground>
-    <div>
+    <div className="min-h-screen bg-off-white">
       <StepHeader
         step={step}
         stepTitle={stepTitles[step]}
@@ -466,8 +575,6 @@ const ZenHome = () => {
         {step === "pricing" && (
           <PricingView
             handleSelectClassType={handleSelectClassType}
-            setSelectedClassType={setSelectedClassType}
-            navigate={navigate}
           />
         )}
 
@@ -495,7 +602,6 @@ const ZenHome = () => {
         {step === "schedule" || step === "schedule-time" ? (
           <ScheduleView
             step={step}
-            selectedClassType={selectedClassType}
             handleSelectClassType={handleSelectClassType}
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
@@ -526,11 +632,22 @@ const ZenHome = () => {
             handleLogout={handleLogout}
             purchasedPackages={purchasedPackages}
             bookedClasses={bookedClasses}
+            payments={payments}
             navigate={navigate}
             accountTab={accountTab}
             setAccountTab={setAccountTab}
             canReschedule={canReschedule}
             handleCancelBooking={handleCancelBooking}
+            // For the new Book a Class tab
+            selectedClassType={selectedClassType}
+            setSelectedClassType={setSelectedClassType}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            availableTimes={availableTimes}
+            selectedSlots={selectedSlots}
+            handleSelectTime={handleSelectTime}
+            handleCompleteBooking={handleCompleteBooking}
+            sessionsRemaining={sessionsRemaining}
           />
         )}
 
@@ -560,7 +677,7 @@ const ZenHome = () => {
                       <div className="flex justify-between items-start">
                         <div>
                           <p className="font-bold text-sm text-foreground uppercase tracking-tight">{item.name}</p>
-                          <p className="text-xs text-muted-foreground mt-1">${item.price} · {item.validity}</p>
+                          <p className="text-xs text-muted-foreground mt-1">${(item as any).price} · {item.validity}</p>
                         </div>
                         <button onClick={() => removeFromCart(idx)} className="text-[10px] font-bold text-destructive/70 hover:text-destructive uppercase tracking-widest">{t('remove')}</button>
                       </div>
@@ -572,7 +689,7 @@ const ZenHome = () => {
                 <div className="p-6 border-t border-border bg-muted/10 space-y-4">
                   <div className="flex justify-between items-center px-1">
                     <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('total_label')}</span>
-                    <span className="text-2xl font-black text-foreground">$ {cart.reduce((s, i) => s + i.price, 0)}</span>
+                    <span className="text-2xl font-black text-foreground">$ {cart.reduce((s, i: any) => s + i.price, 0)}</span>
                   </div>
                   <button onClick={handleCheckoutCart} className="w-full rounded-2xl bg-primary py-4 font-bold text-sm text-primary-foreground shadow-xl transition-all hover:bg-primary/90 active:scale-[0.98] uppercase tracking-wider">
                     {t('checkout')}

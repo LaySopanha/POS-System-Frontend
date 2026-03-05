@@ -1,13 +1,9 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { Store, RotateCcw, Clock, DollarSign, Bell, Shield, Receipt, Wifi, MapPin, Phone, Loader2, Save, ImagePlus, X } from "lucide-react";
+import { Store, DollarSign, Receipt, Wifi, MapPin, Phone, Loader2, Save, ImagePlus, X } from "lucide-react";
 import { Button } from "@repo/ui";
 import { Input } from "@repo/ui";
 import { Label } from "@repo/ui";
-import { Switch } from "@repo/ui";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@repo/ui";
+
 import { toast } from "sonner";
 import { useSettings, useUpdateSettings, uploadLogoImage } from "@repo/store";
 
@@ -15,11 +11,7 @@ const STORAGE_KEY = "zenhouse_store";
 
 const SettingsPage = () => {
   // â”€â”€â”€ Local UI state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [orderNotifications, setOrderNotifications] = useState(true);
-  const [bookingNotifications, setBookingNotifications] = useState(true);
-  const [studioOpen, setStudioOpen] = useState("06:00");
-  const [studioClose, setStudioClose] = useState("21:00");
+
 
   // â”€â”€â”€ Cafe / Receipt info (API-backed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { data: settings, isLoading: settingsLoading } = useSettings();
@@ -269,89 +261,6 @@ const SettingsPage = () => {
         )}
       </div>
 
-      {/* â”€â”€ Studio Hours â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-        <div className="flex items-center gap-2 text-foreground">
-          <Clock className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold">Studio Hours</h3>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Opening Time</Label>
-            <Input type="time" value={studioOpen} onChange={e => setStudioOpen(e.target.value)} className="h-9 text-sm" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Closing Time</Label>
-            <Input type="time" value={studioClose} onChange={e => setStudioClose(e.target.value)} className="h-9 text-sm" />
-          </div>
-        </div>
-      </div>
-
-      {/* â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-        <div className="flex items-center gap-2 text-foreground">
-          <Bell className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold">Notifications</h3>
-        </div>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-foreground">Email Notifications</p>
-              <p className="text-xs text-muted-foreground">Receive email alerts for new activity</p>
-            </div>
-            <Switch checked={emailNotifications} onCheckedChange={setEmailNotifications} />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-foreground">Order Alerts</p>
-              <p className="text-xs text-muted-foreground">Get notified for new orders</p>
-            </div>
-            <Switch checked={orderNotifications} onCheckedChange={setOrderNotifications} />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-foreground">Booking Alerts</p>
-              <p className="text-xs text-muted-foreground">Get notified for class bookings</p>
-            </div>
-            <Switch checked={bookingNotifications} onCheckedChange={setBookingNotifications} />
-          </div>
-        </div>
-      </div>
-
-      {/* â”€â”€ Danger Zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <div className="rounded-xl border border-destructive/30 bg-card p-5 space-y-4">
-        <div className="flex items-center gap-2 text-destructive">
-          <Shield className="h-4 w-4" />
-          <h3 className="text-sm font-semibold">Danger Zone</h3>
-        </div>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-foreground">Reset All Data</p>
-            <p className="text-xs text-muted-foreground">Clear all products, orders, members and restore defaults</p>
-          </div>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm" className="gap-1.5">
-                <RotateCcw className="h-3.5 w-3.5" /> Reset
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Reset All Data?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete all products, orders, members, class data, and user accounts. The app will be restored to its default demo state. This cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleResetData} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Yes, Reset Everything
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </div>
     </div>
   );
 };

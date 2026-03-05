@@ -18,11 +18,12 @@ const PackagesView: React.FC<PackagesViewProps> = ({
     handleSelectMembership,
 }) => {
     const { t } = useTranslation();
-    const filteredPackages = selectedClassType
+    const isMembershipCategory = !selectedClassType || selectedClassType.id === "membership";
+    const filteredPackages = selectedClassType && !isMembershipCategory
         ? classPackages.filter((p) => p.classTypeId === selectedClassType.id)
         : [];
 
-    const title = selectedClassType ? selectedClassType.name : t('membership_packages');
+    const title = isMembershipCategory ? t('membership_packages') : selectedClassType.name;
 
     return (
         <div className="flex min-h-[80vh] flex-col items-center justify-center">
@@ -35,17 +36,17 @@ const PackagesView: React.FC<PackagesViewProps> = ({
                         {title}
                     </h2>
                     <p className="text-xs font-medium text-muted-foreground opacity-80 uppercase tracking-wider">
-                        {selectedClassType ? t('select_package_desc') : t('choose_membership_desc')}
+                        {!isMembershipCategory ? t('select_package_desc') : t('choose_membership_desc')}
                     </p>
                 </div>
 
                 <div className={cn(
                     "grid gap-6 px-4 w-full mx-auto pb-10",
-                    selectedClassType
+                    !isMembershipCategory
                         ? "grid-cols-1 md:grid-cols-2 max-w-5xl"
                         : "grid-cols-1 max-w-lg"
                 )}>
-                    {selectedClassType ? (
+                    {!isMembershipCategory ? (
                         filteredPackages.map((pkg) => {
                             const isIntro = pkg.name.toLowerCase().includes("intro");
                             return (
@@ -73,7 +74,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({
                                                 <span className="text-2xl">$</span>{pkg.price}
                                             </span>
                                             <p className="text-[10px] font-bold font-display text-muted-foreground/60">
-                                                (<span className="text-[16px] text-primary">${Math.round(pkg.price / (pkg.sessions === 999 ? 1 : pkg.sessions))}</span>/class)
+                                                (<span className="text-[16px] text-primary">${pkg.pricePerSession}</span>/class)
                                             </p>
                                         </div>
                                         <p className="mt-4 text-xs font-medium text-muted-foreground leading-relaxed max-w-[150px] mx-auto opacity-70">
