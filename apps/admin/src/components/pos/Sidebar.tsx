@@ -43,7 +43,14 @@ const Sidebar = ({ activeTab, onTabChange, ordersBadge, inboxBadge, onLogout, us
     <aside className="flex h-screen w-64 flex-col border-r border-border bg-card">
       {/* Logo */}
       <div className="flex items-center pt-2">
-        <img src={settings?.logo_url || "/images/zh-logo.png"} alt="Logo" className="h-20 w-20 object-contain" />
+        <img
+          src={settings?.logo_url || "/images/zh-logo.png"}
+          alt="Logo"
+          className="h-20 w-20 object-contain"
+          fetchPriority="high"
+          loading="eager"
+          decoding="sync"
+        />
         <div>
           <h1 className="text-2xl font-normal text-foreground"
             style={{ fontFamily: "'Italianno', cursive" }}>

@@ -16,6 +16,17 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@ZenHouse" />
     <meta name="twitter:image" content="/images/zenhouse-og.png" />
+
+    <!-- Preload LCP resources -->
+    <!-- Fallback logo is the LCP element; preload it so the browser fetches it
+         immediately instead of waiting for JS → API → render cycle. -->
+    <link rel="preload" href="/images/zh-logo.png" as="image" fetchpriority="high" />
+    <!-- Google Fonts: preconnect first, then load all fonts in one request.
+         Using <link rel="stylesheet"> here (not @import in CSS) avoids a
+         render-blocking cascade and loads fonts in parallel with the JS bundle. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Playfair+Display:wght@400;500;600;700&family=Italianno&display=swap" />
   </head>
 
   <body>
