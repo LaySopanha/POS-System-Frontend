@@ -16,7 +16,7 @@ import ClassesPage from "@/components/pos/ClassesPage";
 import RegisterPage from "@/components/pos/RegisterPage";
 import StaffManagement from "@/components/pos/StaffManagement";
 import { useAdminNotifications, useCurrentRegisterSession, useApiProducts, useApiCategories, usePlaceOrder, useApiPosOrders, useSettings, type ApiProduct, type ApiProductVariant, type ApiOrder, type PosCartItem } from "@repo/store";
-import { cn, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Button, Input, Label, toast, Checkbox } from "@repo/ui";
+import { cn, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Button, Input, Label, toast, Checkbox, Skeleton } from "@repo/ui";
 import { CheckCircle2, ShoppingBag, Printer, Plus, Lock } from "lucide-react";
 
 
@@ -73,6 +73,7 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
   const session = useCurrentRegisterSession();
   const { data: settings } = useSettings();
   const isRegisterOpen = session.data?.status === 'open';
+  const isRegisterLoading = session.isLoading;
 
   const handlePrintApiOrder = async (o: import('@repo/store').ApiOrder) => {
     // Resolve logo: prefer settings.logo_url, fall back to local asset
@@ -294,7 +295,29 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
             {activeTab === "dashboard" && <Dashboard />}
             {activeTab === "menu" && (
               <div className="space-y-6 text-left">
-                {!isRegisterOpen ? (
+                {isRegisterLoading ? (
+                  /* ── Loading skeleton while checking register status ── */
+                  <>
+                    <div className="flex gap-2">
+                      {[...Array(5)].map((_, i) => (
+                        <Skeleton key={i} className="h-9 w-24 rounded-full" />
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {[...Array(8)].map((_, i) => (
+                        <div key={i} className="rounded-2xl border border-border bg-card p-4 space-y-3">
+                          <Skeleton className="h-36 w-full rounded-xl" />
+                          <Skeleton className="h-4 w-3/4" />
+                          <Skeleton className="h-3 w-1/2" />
+                          <div className="flex items-center justify-between pt-1">
+                            <Skeleton className="h-5 w-16" />
+                            <Skeleton className="h-8 w-8 rounded-full" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : !isRegisterOpen ? (
                   <div className="flex flex-col items-center justify-center py-20 bg-muted/30 rounded-3xl border-2 border-dashed border-border text-center">
                     <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
                       <Lock className="h-10 w-10 text-primary" />
