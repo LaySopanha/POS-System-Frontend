@@ -1,4 +1,22 @@
-import { useState, useMemo, useCallback, lazy, Suspense } from "react";
+import { useState, useMemo, useCallback, lazy, Suspense, Component } from "react";
+import type { ReactNode, ErrorInfo } from "react";
+
+class TabErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error("[Tab error]", error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/5 text-center">
+          <p className="font-medium text-destructive">Failed to load this section</p>
+          <button className="mt-3 text-sm text-muted-foreground underline" onClick={() => this.setState({ error: null })}>Try again</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import Sidebar from "@/components/pos/Sidebar";
 import TopBar from "@/components/pos/TopBar";
 import CategoryTabs from "@/components/pos/CategoryTabs";
@@ -292,7 +310,7 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
         />
 
         <div className="flex-1 flex overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">            <Suspense fallback={<div className="h-64 rounded-2xl bg-muted animate-pulse" />}>            {activeTab === "dashboard" && <Dashboard />}
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">            <TabErrorBoundary><Suspense fallback={<div className="h-64 rounded-2xl bg-muted animate-pulse" />}>            {activeTab === "dashboard" && <Dashboard />}
             {activeTab === "menu" && (
               <div className="space-y-6 text-left">
                 {isRegisterLoading ? (
@@ -368,7 +386,7 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
             {activeTab === "settings" && <SettingsPage />}
             {activeTab === "register" && <RegisterPage userName={userName} />}
             {activeTab === "staff-management" && <StaffManagement currentUserId={currentUserId} />}
-            </Suspense>
+            </Suspense></TabErrorBoundary>
           </div>
 
           {activeTab === "menu" && (
