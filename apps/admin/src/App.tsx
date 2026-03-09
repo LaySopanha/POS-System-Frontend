@@ -1,13 +1,21 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { Toaster, Sonner, TooltipProvider } from "@repo/ui";
 import { onAuthStateChange, signOut, api, getAccessToken, refreshAccessToken } from "@repo/store";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Index from "./pages/Index";
-import Login from "./pages/Login";
+const Index = lazy(() => import("./pages/Index"));
+const Login = lazy(() => import("./pages/Login"));
 import type { Session } from "@supabase/supabase-js";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000,   // 60s — don't refetch data that was just fetched
+      retry: 1,               // 1 retry max (default 3); fail fast on bad network
+      refetchOnWindowFocus: false, // don't silently refetch every time the window regains focus
+    },
+  },
+});
 
 type MeResponse = { data: { id: string; role: string; first_name: string | null; last_name: string | null; email: string } };
 
@@ -191,7 +199,7 @@ const App = () => {
               element={
                 isAuthenticated && !authError
                   ? <Navigate to={userRole === "admin" ? "/admin" : "/staff"} replace />
-                  : <Login onLogin={handleLogin} authError={authError} onRetry={isPendingRole ? handleRetry : undefined} />
+                  : <Suspense fallback={null}><Login onLogin={handleLogin} authError={authError} onRetry={isPendingRole ? handleRetry : undefined} /></Suspense>
               }
             />
 
@@ -203,7 +211,7 @@ const App = () => {
                   ? <Navigate to="/login" replace />
                   : userRole !== "admin"
                   ? <Navigate to="/staff" replace />
-                  : <Index onLogout={handleLogout} userRole="admin" userName={userName} currentUserId={currentUserId} />
+                  : <Suspense fallback={null}><Index onLogout={handleLogout} userRole="admin" userName={userName} currentUserId={currentUserId} /></Suspense>
               }
             />
 
@@ -213,7 +221,7 @@ const App = () => {
               element={
                 !isAuthenticated
                   ? <Navigate to="/login" replace />
-                  : <Index onLogout={handleLogout} userRole={userRole === "admin" ? "admin" : "staff"} staffPortal userName={userName} />
+                  : <Suspense fallback={null}><Index onLogout={handleLogout} userRole={userRole === "admin" ? "admin" : "staff"} staffPortal userName={userName} /></Suspense>
               }
             />
 
