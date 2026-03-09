@@ -42,7 +42,7 @@ export function useApiWellnessPackages(serviceTypeId?: string) {
                 : "/admin/wellness/packages";
             return api.get<{ data: ApiWellnessPackage[] }>(url).then((r) => r.data);
         },
-        staleTime: 30 * 1000,
+        staleTime: 0,
     });
 }
 

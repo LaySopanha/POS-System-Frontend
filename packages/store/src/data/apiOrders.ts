@@ -84,50 +84,22 @@ export function usePlaceOrder() {
     return useMutation({
         mutationFn: (payload: PlaceOrderPayload) =>
             api.post<{ data: ApiOrder }>("/pos/orders", payload).then((r) => r.data),
-        onSuccess: (newOrder) => {
-            // Prepend the new order into any cached order list instead of full refetch
-            qc.setQueriesData<ApiOrder[]>({ queryKey: orderQueryKeys.all }, (old) =>
-                old ? [newOrder, ...old] : [newOrder]
-            );
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: orderQueryKeys.all });
         },
     });
 }
 
 // ─── Update Order Status ──────────────────────────────────────────────────────
 
-export type ApiOrderStatus = "pending" | "preparing" | "ready" | "completed" | "cancelled";
+export type ApiOrderStatus = "confirmed" | "preparing" | "ready" | "completed" | "cancelled";
 
 export function useUpdateOrderStatus() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: ({ id, status }: { id: string; status: ApiOrderStatus }) =>
             api.put<{ data: ApiOrder }>(`/pos/orders/${id}/status`, { status }).then((r) => r.data),
-
-        // Optimistically patch the cached order list so the UI updates instantly
-        onMutate: async ({ id, status }) => {
-            await qc.cancelQueries({ queryKey: orderQueryKeys.all });
-
-            // Snapshot all order list caches (there may be multiple date-keyed ones)
-            const snapshots = qc.getQueriesData<ApiOrder[]>({ queryKey: orderQueryKeys.all });
-
-            qc.setQueriesData<ApiOrder[]>({ queryKey: orderQueryKeys.all }, (old) =>
-                old?.map((o) => (o.id === id ? { ...o, status } : o)) ?? old
-            );
-
-            return { snapshots };
-        },
-
-        // If the server rejects, roll back to the snapshot
-        onError: (_err, _vars, context) => {
-            if (context?.snapshots) {
-                for (const [queryKey, data] of context.snapshots) {
-                    qc.setQueryData(queryKey, data);
-                }
-            }
-        },
-
-        // Always sync from server after settle (confirms or corrects the optimistic update)
-        onSettled: () => {
+        onSuccess: () => {
             qc.invalidateQueries({ queryKey: orderQueryKeys.all });
         },
     });

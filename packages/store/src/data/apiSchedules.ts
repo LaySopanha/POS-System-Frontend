@@ -76,7 +76,7 @@ export function useApiSchedules(filters?: { service_type_id?: string; date?: str
             const url = qs ? `/admin/wellness/schedules?${qs}` : "/admin/wellness/schedules";
             return api.get<{ data: ApiSchedule[] }>(url).then((r) => r.data);
         },
-        staleTime: 30 * 1000,
+        staleTime: 0,
     });
 }
 
@@ -89,6 +89,7 @@ export function useApiScheduleDetail(id: string | null) {
                 remainingSpots: r.remaining_spots,
             })),
         enabled: !!id,
+        staleTime: 0,
     });
 }
 

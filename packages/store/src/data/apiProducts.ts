@@ -107,7 +107,7 @@ export function useApiProducts(categoryId?: string) {
                 : "/admin/cafe/products";
             return api.get<{ data: ApiProduct[] }>(url).then((r) => r.data);
         },
-        staleTime: 30 * 1000,
+        staleTime: 0,
     });
 }
 
@@ -116,6 +116,7 @@ export function useApiProduct(id: string | null) {
         queryKey: productQueryKeys.detail(id ?? ""),
         queryFn: () => api.get<{ data: ApiProduct }>(`/admin/cafe/products/${id}`).then((r) => r.data),
         enabled: !!id,
+        staleTime: 0,
     });
 }
 
@@ -131,11 +132,9 @@ export interface CreateProductBody {
 }
 
 export function useCreateProduct() {
-    const qc = useQueryClient();
     return useMutation({
         mutationFn: (body: CreateProductBody) =>
             api.post<{ data: ApiProduct }>("/admin/cafe/products", body),
-        onSuccess: () => qc.invalidateQueries({ queryKey: productQueryKeys.all }),
     });
 }
 
@@ -151,13 +150,9 @@ export interface UpdateProductBody {
 }
 
 export function useUpdateProduct() {
-    const qc = useQueryClient();
     return useMutation({
         mutationFn: ({ id, ...body }: UpdateProductBody & { id: string }) =>
             api.put<{ data: ApiProduct }>(`/admin/cafe/products/${id}`, body),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: productQueryKeys.all });
-        },
     });
 }
 

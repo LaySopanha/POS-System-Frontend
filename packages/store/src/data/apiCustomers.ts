@@ -84,7 +84,7 @@ export function useApiCustomers(page: number = 1, tierId?: string) {
             if (tierId) params.set("tier_id", tierId);
             return api.get<PaginatedResponse<ApiCustomerAccount>>(`/admin/customers?${params.toString()}`);
         },
-        staleTime: 30 * 1000,
+        staleTime: 0,
     });
 }
 
@@ -94,6 +94,7 @@ export function useApiCustomerDetail(userId: string | null) {
         queryFn: () =>
             api.get<{ data: ApiCustomerDetail }>(`/admin/customers/${userId}`).then((r) => r.data),
         enabled: !!userId,
+        staleTime: 0,
     });
 }
 

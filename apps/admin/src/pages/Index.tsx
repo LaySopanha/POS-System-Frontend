@@ -291,7 +291,8 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
         />
 
         <div className="flex-1 flex overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">            {activeTab === "dashboard" && <Dashboard />}
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+            {activeTab === "dashboard" && <Dashboard />}
             {activeTab === "menu" && (
               <div className="space-y-6 text-left">
                 {isRegisterLoading ? (
