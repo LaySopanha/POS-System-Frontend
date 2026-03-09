@@ -92,16 +92,26 @@ export function usePlaceOrder() {
 
 // ─── Update Order Status ──────────────────────────────────────────────────────
 
-export type ApiOrderStatus = "confirmed" | "preparing" | "ready" | "completed" | "cancelled";
+export type ApiOrderStatus = "pending" | "preparing" | "ready" | "completed" | "cancelled";
 
 export function useUpdateOrderStatus() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: ({ id, status }: { id: string; status: ApiOrderStatus }) =>
             api.put<{ data: ApiOrder }>(`/pos/orders/${id}/status`, { status }).then((r) => r.data),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: orderQueryKeys.all });
+        onMutate: async ({ id, status }) => {
+            await qc.cancelQueries({ queryKey: orderQueryKeys.all });
+            const listQueries = qc.getQueriesData<ApiOrder[]>({ queryKey: orderQueryKeys.all });
+            listQueries.forEach(([key, old]) => {
+                if (!old) return;
+                qc.setQueryData(key, old.map((o) => (o.id === id ? { ...o, status } : o)));
+            });
+            return { listQueries };
         },
+        onError: (_err, _vars, ctx) => {
+            ctx?.listQueries.forEach(([key, old]) => { if (old) qc.setQueryData(key, old); });
+        },
+        onSettled: () => qc.invalidateQueries({ queryKey: orderQueryKeys.all }),
     });
 }
 

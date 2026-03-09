@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://placeholder.supabase.co";
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "placeholder-key";
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (supabaseUrl.includes("placeholder")) {
   console.warn(
     "[ZenHouse] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY — auth will not work."
   );

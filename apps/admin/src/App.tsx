@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Component } from "react";
+import type { ReactNode, ErrorInfo } from "react";
 import { Toaster, Sonner, TooltipProvider } from "@repo/ui";
 import { onAuthStateChange, signOut, api, getAccessToken, refreshAccessToken } from "@repo/store";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -7,7 +8,35 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import type { Session } from "@supabase/supabase-js";
 
-const queryClient = new QueryClient();
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error("[App error]", error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <div className="text-center space-y-3 p-8">
+            <p className="text-lg font-semibold text-foreground">Something went wrong</p>
+            <p className="text-sm text-muted-foreground">Please refresh the page to try again.</p>
+            <button className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground" onClick={() => window.location.reload()}>Refresh</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 type MeResponse = { data: { id: string; role: string; first_name: string | null; last_name: string | null; email: string } };
 
@@ -191,7 +220,7 @@ const App = () => {
               element={
                 isAuthenticated && !authError
                   ? <Navigate to={userRole === "admin" ? "/admin" : "/staff"} replace />
-                  : <Login onLogin={handleLogin} authError={authError} onRetry={isPendingRole ? handleRetry : undefined} />
+                  : <ErrorBoundary><Login onLogin={handleLogin} authError={authError} onRetry={isPendingRole ? handleRetry : undefined} /></ErrorBoundary>
               }
             />
 
@@ -203,7 +232,7 @@ const App = () => {
                   ? <Navigate to="/login" replace />
                   : userRole !== "admin"
                   ? <Navigate to="/staff" replace />
-                  : <Index onLogout={handleLogout} userRole="admin" userName={userName} currentUserId={currentUserId} />
+                  : <ErrorBoundary><Index onLogout={handleLogout} userRole="admin" userName={userName} currentUserId={currentUserId} /></ErrorBoundary>
               }
             />
 
@@ -213,7 +242,7 @@ const App = () => {
               element={
                 !isAuthenticated
                   ? <Navigate to="/login" replace />
-                  : <Index onLogout={handleLogout} userRole={userRole === "admin" ? "admin" : "staff"} staffPortal userName={userName} />
+                  : <ErrorBoundary><Index onLogout={handleLogout} userRole={userRole === "admin" ? "admin" : "staff"} staffPortal userName={userName} /></ErrorBoundary>
               }
             />
 
