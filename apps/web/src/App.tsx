@@ -1,10 +1,10 @@
-import { lazy, Suspense, Component } from "react";
+import { Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import { Toaster, Sonner, TooltipProvider } from "@repo/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-const ZenHome = lazy(() => import("./pages/ZenHome"));
-const NotFound = lazy(() => import("./pages/NotFound"));
+import ZenHome from "./pages/ZenHome";
+import NotFound from "./pages/NotFound";
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
@@ -43,7 +43,6 @@ const App = () => (
             <Sonner position="top-right" />
             <BrowserRouter>
                 <ErrorBoundary>
-                <Suspense fallback={<div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center" }}><div style={{ width: 32, height: 32, border: "4px solid #e5e7eb", borderTopColor: "#6366f1", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} /></div>}>
                 <Routes>
                     <Route path="/" element={<ZenHome />} />
                     <Route path="/pricing" element={<ZenHome />} />
@@ -58,7 +57,6 @@ const App = () => (
                     <Route path="/success" element={<ZenHome />} />
                     <Route path="*" element={<NotFound />} />
                 </Routes>
-                </Suspense>
                 </ErrorBoundary>
             </BrowserRouter>
         </TooltipProvider>

@@ -1,12 +1,12 @@
-import { useState, useEffect, useRef, useCallback, lazy, Suspense, Component } from "react";
+import { useState, useEffect, useRef, useCallback, Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Toaster, Sonner, TooltipProvider } from "@repo/ui";
 import { onAuthStateChange, signOut, api, getAccessToken, refreshAccessToken } from "@repo/store";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-const Index = lazy(() => import("./pages/Index"));
-const Login = lazy(() => import("./pages/Login"));
+import Index from "./pages/Index";
+import Login from "./pages/Login";
 
 // Catches errors thrown by lazy-loaded components so a crash doesn't blank the screen.
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -224,7 +224,7 @@ const App = () => {
               element={
                 isAuthenticated && !authError
                   ? <Navigate to={userRole === "admin" ? "/admin" : "/staff"} replace />
-                  : <ErrorBoundary><Suspense fallback={<div className="flex min-h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}><Login onLogin={handleLogin} authError={authError} onRetry={isPendingRole ? handleRetry : undefined} /></Suspense></ErrorBoundary>
+                  : <ErrorBoundary><Login onLogin={handleLogin} authError={authError} onRetry={isPendingRole ? handleRetry : undefined} /></ErrorBoundary>
               }
             />
 
@@ -236,7 +236,7 @@ const App = () => {
                   ? <Navigate to="/login" replace />
                   : userRole !== "admin"
                   ? <Navigate to="/staff" replace />
-                  : <ErrorBoundary><Suspense fallback={null}><Index onLogout={handleLogout} userRole="admin" userName={userName} currentUserId={currentUserId} /></Suspense></ErrorBoundary>
+                  : <ErrorBoundary><Index onLogout={handleLogout} userRole="admin" userName={userName} currentUserId={currentUserId} /></ErrorBoundary>
               }
             />
 
@@ -246,7 +246,7 @@ const App = () => {
               element={
                 !isAuthenticated
                   ? <Navigate to="/login" replace />
-                  : <ErrorBoundary><Suspense fallback={null}><Index onLogout={handleLogout} userRole={userRole === "admin" ? "admin" : "staff"} staffPortal userName={userName} /></Suspense></ErrorBoundary>
+                  : <ErrorBoundary><Index onLogout={handleLogout} userRole={userRole === "admin" ? "admin" : "staff"} staffPortal userName={userName} /></ErrorBoundary>
               }
             />
 

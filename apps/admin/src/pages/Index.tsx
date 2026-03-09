@@ -1,39 +1,20 @@
-import { useState, useMemo, useCallback, lazy, Suspense, Component } from "react";
-import type { ReactNode, ErrorInfo } from "react";
-
-class TabErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state = { error: null };
-  static getDerivedStateFromError(error: Error) { return { error }; }
-  componentDidCatch(error: Error, info: ErrorInfo) { console.error("[Tab error]", error, info); }
-  render() {
-    if (this.state.error) {
-      return (
-        <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/5 text-center">
-          <p className="font-medium text-destructive">Failed to load this section</p>
-          <button className="mt-3 text-sm text-muted-foreground underline" onClick={() => this.setState({ error: null })}>Try again</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+import { useState, useMemo, useCallback } from "react";
 import Sidebar from "@/components/pos/Sidebar";
 import TopBar from "@/components/pos/TopBar";
 import CategoryTabs from "@/components/pos/CategoryTabs";
 import ProductCard from "@/components/pos/ProductCard";
 import CartPanel from "@/components/pos/CartPanel";
-
-const Dashboard = lazy(() => import("@/components/pos/Dashboard"));
-const OrdersPage = lazy(() => import("@/components/pos/OrdersPage"));
-const ProductManagement = lazy(() => import("@/components/pos/ProductManagement"));
-const CustomersPage = lazy(() => import("@/components/pos/CustomersPage"));
-const ClassManagement = lazy(() => import("@/components/pos/ClassManagement"));
-const PackageManagement = lazy(() => import("@/components/pos/PackageManagement"));
-const InboxPage = lazy(() => import("@/components/pos/InboxPage"));
-const SettingsPage = lazy(() => import("@/components/pos/SettingsPage"));
-const ClassesPage = lazy(() => import("@/components/pos/ClassesPage"));
-const RegisterPage = lazy(() => import("@/components/pos/RegisterPage"));
-const StaffManagement = lazy(() => import("@/components/pos/StaffManagement"));
+import Dashboard from "@/components/pos/Dashboard";
+import OrdersPage from "@/components/pos/OrdersPage";
+import ProductManagement from "@/components/pos/ProductManagement";
+import CustomersPage from "@/components/pos/CustomersPage";
+import ClassManagement from "@/components/pos/ClassManagement";
+import PackageManagement from "@/components/pos/PackageManagement";
+import InboxPage from "@/components/pos/InboxPage";
+import SettingsPage from "@/components/pos/SettingsPage";
+import ClassesPage from "@/components/pos/ClassesPage";
+import RegisterPage from "@/components/pos/RegisterPage";
+import StaffManagement from "@/components/pos/StaffManagement";
 import { useAdminNotifications, useCurrentRegisterSession, useApiProducts, useApiCategories, usePlaceOrder, useApiPosOrders, useSettings, type ApiProduct, type ApiProductVariant, type ApiOrder, type PosCartItem } from "@repo/store";
 import { cn, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Button, Input, Label, toast, Checkbox, Skeleton } from "@repo/ui";
 import { CheckCircle2, ShoppingBag, Printer, Plus, Lock } from "lucide-react";
@@ -310,7 +291,7 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
         />
 
         <div className="flex-1 flex overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">            <TabErrorBoundary><Suspense fallback={<div className="h-64 rounded-2xl bg-muted animate-pulse" />}>            {activeTab === "dashboard" && <Dashboard />}
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">            {activeTab === "dashboard" && <Dashboard />}
             {activeTab === "menu" && (
               <div className="space-y-6 text-left">
                 {isRegisterLoading ? (
@@ -386,7 +367,6 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
             {activeTab === "settings" && <SettingsPage />}
             {activeTab === "register" && <RegisterPage userName={userName} />}
             {activeTab === "staff-management" && <StaffManagement currentUserId={currentUserId} />}
-            </Suspense></TabErrorBoundary>
           </div>
 
           {activeTab === "menu" && (
