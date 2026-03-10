@@ -14,6 +14,7 @@ export * from "./data/apiNotifications";
 export * from "./data/apiWellnessServiceTypes";
 export * from "./data/apiWellnessPackages";
 export * from "./data/apiSchedules";
+export * from "./data/apiUserPackages";
 export * from "./data/apiCustomers";
 export * from "./supabase";
 export * from "./auth";

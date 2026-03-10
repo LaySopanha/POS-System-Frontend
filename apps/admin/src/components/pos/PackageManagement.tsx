@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Search, Plus, Pencil, Trash2, Package, Crown, Loader2 } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Package, Crown, Loader2, Dumbbell } from "lucide-react";
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from "@repo/ui";
 import { Input } from "@repo/ui";
 import { Button } from "@repo/ui";
@@ -7,6 +7,9 @@ import { Label } from "@repo/ui";
 import { Skeleton } from "@repo/ui";
 import {
   useApiServiceTypes,
+  useCreateServiceType,
+  useUpdateServiceType,
+  useDeleteServiceType,
   useApiWellnessPackages,
   useCreateWellnessPackage,
   useUpdateWellnessPackage,
@@ -26,29 +29,60 @@ import {
 } from "@repo/ui";
 import { toast } from "sonner";
 
-type Tab = "class-packages" | "memberships";
+type Tab = "class-packages" | "memberships" | "service-types";
 
 type PkgForm = {
   name: string; serviceTypeId: string; sessions: string; totalPrice: string;
-  validityDays: string; description: string; isActive: boolean;
+  validityDays: string; remarks: string; isActive: boolean;
 };
 const emptyPkgForm: PkgForm = {
   name: "", serviceTypeId: "", sessions: "1", totalPrice: "",
-  validityDays: "30", description: "", isActive: true,
+  validityDays: "30", remarks: "", isActive: true,
 };
 
 type MemForm = {
   name: string; serviceTypeId: string; price: string;
-  validityDays: string; description: string; isActive: boolean;
+  validityDays: string; benefits: string; remarks: string; isActive: boolean;
 };
 const emptyMemForm: MemForm = {
-  name: "", serviceTypeId: "", price: "", validityDays: "30", description: "", isActive: true,
+  name: "", serviceTypeId: "", price: "", validityDays: "30", benefits: "", remarks: "", isActive: true,
 };
 
 const PackageManagement = () => {
   const [tab, setTab] = useState<Tab>("class-packages");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+
+  // Service type CRUD
+  const createSvcType = useCreateServiceType();
+  const updateSvcType = useUpdateServiceType();
+  const deleteSvcType = useDeleteServiceType();
+  const [editSvcType, setEditSvcType] = useState<ApiServiceType | null>(null);
+  const [isNewSvcType, setIsNewSvcType] = useState(false);
+  const [svcForm, setSvcForm] = useState({ name: "", description: "", isActive: true });
+
+  const openNewSvcType = () => { setSvcForm({ name: "", description: "", isActive: true }); setIsNewSvcType(true); };
+  const openEditSvcType = (t: ApiServiceType) => { setSvcForm({ name: t.name, description: t.description || "", isActive: t.is_active }); setEditSvcType(t); };
+  const closeSvcTypeDialog = () => { setEditSvcType(null); setIsNewSvcType(false); };
+
+  const saveSvcType = async () => {
+    if (!svcForm.name.trim()) return;
+    try {
+      if (editSvcType) {
+        await updateSvcType.mutateAsync({ id: editSvcType.id, name: svcForm.name, description: svcForm.description || undefined, is_active: svcForm.isActive });
+        toast.success("Service type updated");
+      } else {
+        await createSvcType.mutateAsync({ name: svcForm.name, description: svcForm.description || undefined, is_active: svcForm.isActive });
+        toast.success("Service type created");
+      }
+      closeSvcTypeDialog();
+    } catch (err: any) { toast.error(err?.message || "Failed to save"); }
+  };
+
+  const handleDeleteSvcType = async (t: ApiServiceType) => {
+    try { await deleteSvcType.mutateAsync(t.id); toast.success("Service type deleted"); }
+    catch (err: any) { toast.error(err?.message || "Failed to delete"); }
+  };
 
   // API data
   const { data: serviceTypes = [], isLoading: typesLoading } = useApiServiceTypes();
@@ -104,7 +138,7 @@ const PackageManagement = () => {
       sessions: String(pkg.sessions_included ?? 1),
       totalPrice: String(pkg.price),
       validityDays: String(pkg.validity_days),
-      description: pkg.description || "",
+      remarks: pkg.remarks || "",
       isActive: pkg.is_active,
     });
     setEditPkg(pkg);
@@ -127,7 +161,7 @@ const PackageManagement = () => {
           sessions_included: sessions,
           price,
           validity_days: validityDays,
-          description: pkgForm.description || null,
+          remarks: pkgForm.remarks || null,
           is_active: pkgForm.isActive,
         });
         toast.success("Package updated");
@@ -139,7 +173,7 @@ const PackageManagement = () => {
           sessions_included: sessions,
           price,
           validity_days: validityDays,
-          description: pkgForm.description || undefined,
+          remarks: pkgForm.remarks || undefined,
           is_active: pkgForm.isActive,
         });
         toast.success("Package created");
@@ -173,8 +207,9 @@ const PackageManagement = () => {
       name: plan.name,
       serviceTypeId: plan.service_type_id,
       price: String(plan.price),
+      benefits: plan.benefits || "",
       validityDays: String(plan.validity_days),
-      description: plan.description || "",
+      remarks: plan.remarks || "",
       isActive: plan.is_active,
     });
     setEditMem(plan);
@@ -196,7 +231,8 @@ const PackageManagement = () => {
           sessions_included: null,
           price,
           validity_days: validityDays,
-          description: memForm.description || null,
+          benefits: memForm.benefits || null,
+          remarks: memForm.remarks || null,
           is_active: memForm.isActive,
         });
         toast.success("Membership updated");
@@ -208,7 +244,8 @@ const PackageManagement = () => {
           sessions_included: null,
           price,
           validity_days: validityDays,
-          description: memForm.description || undefined,
+          benefits: memForm.benefits || undefined,
+          remarks: memForm.remarks || undefined,
           is_active: memForm.isActive,
         });
         toast.success("Membership created");
@@ -271,10 +308,20 @@ const PackageManagement = () => {
           <button onClick={() => setTab("memberships")} className={cn("rounded-full px-4 py-1.5 text-xs font-medium transition-colors border", tab === "memberships" ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:bg-muted")}>
             <Crown className="inline h-3 w-3 mr-1" /> Memberships
           </button>
+          <button onClick={() => setTab("service-types")} className={cn("rounded-full px-4 py-1.5 text-xs font-medium transition-colors border", tab === "service-types" ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:bg-muted")}>
+            <Dumbbell className="inline h-3 w-3 mr-1" /> Service Types
+          </button>
         </div>
-        <Button onClick={tab === "class-packages" ? openNewPkg : openNewMem} className="gap-2">
-          <Plus className="h-4 w-4" /> {tab === "class-packages" ? "Add Package" : "Add Plan"}
-        </Button>
+        {tab !== "service-types" && (
+          <Button onClick={tab === "class-packages" ? openNewPkg : openNewMem} className="gap-2">
+            <Plus className="h-4 w-4" /> {tab === "class-packages" ? "Add Package" : "Add Plan"}
+          </Button>
+        )}
+        {tab === "service-types" && (
+          <Button onClick={openNewSvcType} className="gap-2">
+            <Plus className="h-4 w-4" /> Add Service Type
+          </Button>
+        )}
       </div>
 
       {/* Class Packages Tab */}
@@ -287,7 +334,7 @@ const PackageManagement = () => {
             </div>
             <div className="flex gap-1.5">
               <button onClick={() => setTypeFilter("all")} className={cn("rounded-full px-3 py-1.5 text-xs font-medium transition-colors border", typeFilter === "all" ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:bg-muted")}>All</button>
-              {serviceTypes.map(st => (
+              {serviceTypes.filter(st => st.name !== "Membership").map(st => (
                 <button key={st.id} onClick={() => setTypeFilter(st.id)} className={cn("rounded-full px-3 py-1.5 text-xs font-medium transition-colors border", typeFilter === st.id ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:bg-muted")}>{st.name}</button>
               ))}
             </div>
@@ -307,7 +354,7 @@ const PackageManagement = () => {
                       {!pkg.is_active && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">INACTIVE</span>}
                       <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{getServiceTypeName(pkg.service_type_id)}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">{pkg.description}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">{pkg.remarks}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold text-foreground">${price}</p>
@@ -399,12 +446,70 @@ const PackageManagement = () => {
                     </div>
                   </div>
                 </div>
-                {plan.description && <p className="mt-2 text-xs text-muted-foreground italic">{plan.description}</p>}
+                {plan.benefits && <p className="mt-2 text-xs text-foreground">{plan.benefits}</p>}
+                {plan.remarks && <p className="mt-1 text-xs text-muted-foreground italic">{plan.remarks}</p>}
                 {!plan.is_active && <span className="mt-2 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">INACTIVE</span>}
               </div>
             );
           })}
           {membershipPlans.length === 0 && <div className="py-16 text-center text-sm text-muted-foreground">No membership plans found</div>}
+        </div>
+      )}
+
+      {/* Service Types Tab */}
+      {tab === "service-types" && (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border bg-muted/30">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Packages</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {serviceTypes.map((t) => (
+                <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                  <td className="px-4 py-3"><p className="text-sm font-semibold text-foreground">{t.name}</p></td>
+                  <td className="px-4 py-3"><p className="text-sm text-muted-foreground max-w-xs truncate">{t.description || "—"}</p></td>
+                  <td className="px-4 py-3"><span className="text-sm font-medium text-foreground">{t.packages_count ?? "—"}</span></td>
+                  <td className="px-4 py-3">
+                    <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                      t.is_active ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-500 border-slate-100")}>
+                      {t.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <Tooltip><TooltipTrigger asChild>
+                        <button onClick={() => openEditSvcType(t)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"><Pencil className="h-4 w-4" /></button>
+                      </TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip>
+                      <AlertDialog>
+                        <Tooltip><TooltipTrigger asChild>
+                          <AlertDialogTrigger asChild>
+                            <button className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"><Trash2 className="h-4 w-4" /></button>
+                          </AlertDialogTrigger>
+                        </TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Service Type</AlertDialogTitle>
+                            <AlertDialogDescription>Delete "{t.name}"? This will also remove all associated packages.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteSvcType(t)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {serviceTypes.length === 0 && <div className="py-16 text-center text-sm text-muted-foreground">No service types found</div>}
         </div>
       )}
 
@@ -427,7 +532,7 @@ const PackageManagement = () => {
               <div className="space-y-1.5"><Label>Total ($)</Label><Input type="number" value={pkgForm.totalPrice} onChange={e => setPkgForm(f => ({ ...f, totalPrice: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>Validity (days)</Label><Input type="number" value={pkgForm.validityDays} onChange={e => setPkgForm(f => ({ ...f, validityDays: e.target.value }))} /></div>
             </div>
-            <div className="space-y-1.5"><Label>Description</Label><textarea className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground" rows={2} value={pkgForm.description} onChange={e => setPkgForm(f => ({ ...f, description: e.target.value }))} placeholder="Package details, policy notes..." /></div>
+            <div className="space-y-1.5"><Label>Remarks</Label><textarea className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground" rows={2} value={pkgForm.remarks} onChange={e => setPkgForm(f => ({ ...f, remarks: e.target.value }))} placeholder="e.g. Non-transferrable, non-refundable, non-sharable" /></div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={pkgForm.isActive} onChange={e => setPkgForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded" />
               Active (visible to customers)
@@ -461,7 +566,8 @@ const PackageManagement = () => {
               <div className="space-y-1.5"><Label>Price ($)</Label><Input type="number" value={memForm.price} onChange={e => setMemForm(f => ({ ...f, price: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>Validity (days)</Label><Input type="number" value={memForm.validityDays} onChange={e => setMemForm(f => ({ ...f, validityDays: e.target.value }))} /></div>
             </div>
-            <div className="space-y-1.5"><Label>Description</Label><Input value={memForm.description} onChange={e => setMemForm(f => ({ ...f, description: e.target.value }))} placeholder="Plan description..." /></div>
+            <div className="space-y-1.5"><Label>Benefits</Label><Input value={memForm.benefits} onChange={e => setMemForm(f => ({ ...f, benefits: e.target.value }))} placeholder="e.g. 8 classes, 8 recovery passes" /></div>
+            <div className="space-y-1.5"><Label>Remarks</Label><Input value={memForm.remarks} onChange={e => setMemForm(f => ({ ...f, remarks: e.target.value }))} placeholder="e.g. Non-transferrable, non-refundable, non-sharable" /></div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={memForm.isActive} onChange={e => setMemForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded" />
               Active (visible to customers)
@@ -472,6 +578,39 @@ const PackageManagement = () => {
             <Button onClick={saveMem} disabled={createPkg.isPending || updatePkg.isPending}>
               {(createPkg.isPending || updatePkg.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editMem ? "Save Changes" : "Create Plan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Service Type Dialog */}
+      <Dialog open={!!editSvcType || isNewSvcType} onOpenChange={closeSvcTypeDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{editSvcType ? "Edit Service Type" : "Add Service Type"}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input value={svcForm.name} onChange={(e) => setSvcForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Reformer, Hot Pilates..." />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Description</Label>
+              <textarea
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                rows={2}
+                value={svcForm.description}
+                onChange={(e) => setSvcForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Brief description of this class type..."
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={svcForm.isActive} onChange={(e) => setSvcForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded" />
+              Active (visible to customers)
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeSvcTypeDialog}>Cancel</Button>
+            <Button onClick={saveSvcType} disabled={createSvcType.isPending || updateSvcType.isPending}>
+              {(createSvcType.isPending || updateSvcType.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {editSvcType ? "Save Changes" : "Add Service Type"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -12,7 +12,8 @@ import {
     Loader2,
     Eye,
     EyeOff,
-    AlertTriangle
+    AlertTriangle,
+    UserCircle2
 } from "lucide-react";
 import {
     Button,
@@ -46,7 +47,7 @@ interface StaffMember {
     last_name: string;
     email: string;
     phone: string | null;
-    role: "admin" | "staff";
+    role: "admin" | "staff" | "instructor";
     is_active: boolean;
     created_at: string;
 }
@@ -72,13 +73,13 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
         email: "",
         phone: "",
         password: "",
-        role: "staff" as "admin" | "staff"
+        role: "staff" as "admin" | "staff" | "instructor"
     });
 
     const fetchStaff = useCallback(async () => {
         try {
             setLoading(true);
-            const res = await api.get<{ data: StaffMember[] }>("/admin/users?role=admin,staff");
+            const res = await api.get<{ data: StaffMember[] }>("/admin/users?role=admin,staff,instructor");
             // The endpoint returns paginated data
             const data = (res as any).data ?? (res as any);
             setStaff(Array.isArray(data) ? data : []);
@@ -130,8 +131,13 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
     };
 
     const handleSaveStaff = async () => {
-        if (!formData.first_name || !formData.email) {
-            toast.error("First name and email are required");
+        if (!formData.first_name) {
+            toast.error("First name is required");
+            return;
+        }
+
+        if (formData.role !== 'instructor' && !formData.email) {
+            toast.error("Email is required for staff and admins");
             return;
         }
 
@@ -148,8 +154,8 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
                 });
                 toast.success("Staff updated successfully");
             } else {
-                // Create new staff user
-                if (!formData.password || formData.password.length < 6) {
+                // Create new staff/instructor user
+                if (formData.role !== 'instructor' && (!formData.password || formData.password.length < 6)) {
                     toast.error("Password must be at least 6 characters");
                     setSaving(false);
                     return;
@@ -158,9 +164,9 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
                 await api.post("/admin/users", {
                     first_name: formData.first_name,
                     last_name: formData.last_name,
-                    email: formData.email,
+                    email: formData.email || `${formData.first_name.toLowerCase()}.${Date.now()}@instructor.local`, // dummy email for instructors if empty
                     phone: formData.phone || null,
-                    password: formData.password,
+                    password: formData.role === 'instructor' ? undefined : formData.password,
                     role: formData.role,
                 });
                 toast.success("Staff member created successfully");
@@ -299,7 +305,7 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
                                         <div className="space-y-0.5">
                                             <div className="flex items-center gap-2 text-muted-foreground text-xs">
                                                 <Mail className="h-3 w-3" />
-                                                <span>{member.email}</span>
+                                                <span>{member.role === 'instructor' ? 'No Login Access' : member.email}</span>
                                             </div>
                                             {member.phone && (
                                             <div className="flex items-center gap-2 text-muted-foreground text-xs">
@@ -313,8 +319,10 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
                                         <div className="flex items-center gap-1.5 font-medium">
                                             {member.role === "admin" ? (
                                                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                                            ) : (
+                                            ) : member.role === "staff" ? (
                                                 <Shield className="h-3.5 w-3.5 text-slate-400" />
+                                            ) : (
+                                                <UserCircle2 className="h-3.5 w-3.5 text-blue-400" />
                                             )}
                                             <span className="capitalize">{member.role}</span>
                                         </div>
@@ -414,17 +422,19 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
                                 />
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label>Email Address</Label>
-                            <Input
-                                type="email"
-                                placeholder="john@zenhouse.com"
-                                value={formData.email}
-                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                disabled={!!editingStaff}
-                            />
-                        </div>
-                        {!editingStaff && (
+                        {formData.role !== 'instructor' && (
+                            <div className="space-y-2">
+                                <Label>Email Address</Label>
+                                <Input
+                                    type="email"
+                                    placeholder="john@zenhouse.com"
+                                    value={formData.email}
+                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                    disabled={!!editingStaff}
+                                />
+                            </div>
+                        )}
+                        {(!editingStaff && formData.role !== 'instructor') && (
                         <div className="space-y-2">
                             <Label>Password</Label>
                             <div className="relative">
@@ -462,6 +472,18 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
                                 </div>
                             ) : (
                             <div className="flex gap-2">
+                                <button
+                                    onClick={() => setFormData({ ...formData, role: "instructor" })}
+                                    disabled={!!(editingStaff && isSelf(editingStaff))}
+                                    className={cn(
+                                        "flex-1 rounded-lg border p-3 text-center transition-all",
+                                        formData.role === "instructor" ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground",
+                                        editingStaff && isSelf(editingStaff) && "cursor-not-allowed opacity-40"
+                                    )}
+                                >
+                                    <UserCircle2 className="mx-auto mb-1 h-4 w-4" />
+                                    <div className="text-sm font-medium">Instructor</div>
+                                </button>
                                 <button
                                     onClick={() => setFormData({ ...formData, role: "staff" })}
                                     disabled={!!(editingStaff && isSelf(editingStaff))}

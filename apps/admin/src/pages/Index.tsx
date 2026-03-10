@@ -9,6 +9,7 @@ import OrdersPage from "@/components/pos/OrdersPage";
 import ProductManagement from "@/components/pos/ProductManagement";
 import CustomersPage from "@/components/pos/CustomersPage";
 import ClassManagement from "@/components/pos/ClassManagement";
+import CustomerPackagesPage from "@/components/pos/CustomerPackagesPage";
 import PackageManagement from "@/components/pos/PackageManagement";
 import InboxPage from "@/components/pos/InboxPage";
 import SettingsPage from "@/components/pos/SettingsPage";
@@ -363,7 +364,8 @@ const Index = ({ onLogout, userRole, staffPortal = false, userName = "", current
             {activeTab === "members" && <CustomersPage />}
             {activeTab === "class-management" && <ClassManagement />}
             {activeTab === "packages" && <PackageManagement />}
-            {activeTab === "availability" && <ClassesPage />}
+            {activeTab === "schedule" && <ClassesPage />}
+            {activeTab === "customer-packages" && <CustomerPackagesPage />}
             {activeTab === "inbox" && <InboxPage />}
             {activeTab === "settings" && <SettingsPage />}
             {activeTab === "register" && <RegisterPage userName={userName} />}

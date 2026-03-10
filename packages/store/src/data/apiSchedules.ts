@@ -11,6 +11,7 @@ export interface ApiInstructor {
     email: string;
 }
 
+
 export interface ApiBooking {
     id: string;
     user_id: string;
@@ -77,6 +78,14 @@ export function useApiSchedules(filters?: { service_type_id?: string; date?: str
             return api.get<{ data: ApiSchedule[] }>(url).then((r) => r.data);
         },
         staleTime: 30 * 1000,
+    });
+}
+
+export function useApiInstructors() {
+    return useQuery({
+        queryKey: ["wellness-instructors"],
+        queryFn: () => api.get<{ data: ApiInstructor[] }>("/admin/wellness/instructors").then((r) => r.data),
+        staleTime: 5 * 60 * 1000, // 5 minutes
     });
 }
 

@@ -1,4 +1,4 @@
-import { LayoutGrid, ClipboardList, Calendar, Settings, LogOut, Package, Users, Inbox, Dumbbell, CreditCard, ShoppingBag, Wallet, ShieldCheck } from "lucide-react";
+import { LayoutGrid, ClipboardList, Calendar, Settings, LogOut, Package, Users, Inbox, CreditCard, ShoppingBag, Wallet, ShieldCheck, Ticket } from "lucide-react";
 import { cn } from "@repo/ui";
 import { useSettings } from "@repo/store";
 
@@ -18,10 +18,10 @@ const navItems = [
   { id: "orders", label: "Orders", icon: ClipboardList, minRole: "staff" },
   { id: "register", label: "Register", icon: Wallet, minRole: "staff" },
   { id: "products", label: "Products", icon: Package, minRole: "admin" },
-  { id: "class-management", label: "Classes", icon: Dumbbell, minRole: "admin" },
   { id: "packages", label: "Packages", icon: CreditCard, minRole: "admin" },
   { id: "staff-management", label: "Staff", icon: ShieldCheck, minRole: "admin" },
-  { id: "availability", label: "Availability", icon: Calendar, minRole: "staff" },
+  { id: "schedule", label: "Schedule", icon: Calendar, minRole: "staff" },
+  { id: "customer-packages", label: "Customer Packages", icon: Ticket, minRole: "staff" },
   { id: "members", label: "Customers", icon: Users, minRole: "staff" },
   { id: "inbox", label: "Inbox", icon: Inbox, minRole: "staff" },
   { id: "settings", label: "Settings", icon: Settings, minRole: "admin" },

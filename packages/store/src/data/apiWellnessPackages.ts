@@ -13,7 +13,8 @@ export interface ApiWellnessPackage {
     sessions_included: number | null;
     price: string;
     validity_days: number;
-    description: string | null;
+    benefits: string | null;
+    remarks: string | null;
     is_refundable: boolean;
     is_shareable: boolean;
     is_transferable: boolean;
@@ -62,7 +63,8 @@ export interface CreateWellnessPackageBody {
     sessions_included?: number | null;
     price: number;
     validity_days: number;
-    description?: string;
+    benefits?: string;
+    remarks?: string;
     is_refundable?: boolean;
     is_shareable?: boolean;
     is_transferable?: boolean;
@@ -89,7 +91,8 @@ export interface UpdateWellnessPackageBody {
     sessions_included?: number | null;
     price?: number;
     validity_days?: number;
-    description?: string | null;
+    benefits?: string | null;
+    remarks?: string | null;
     is_refundable?: boolean;
     is_shareable?: boolean;
     is_transferable?: boolean;

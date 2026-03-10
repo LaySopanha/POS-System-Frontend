@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Clock, Users, Calendar, ChevronRight, AlertCircle, CheckCircle2, XCircle, UserX, Plus, Pencil, Loader2 } from "lucide-react";
+import { Clock, Users, Calendar, ChevronRight, AlertCircle, CheckCircle2, XCircle, UserX, Plus, Pencil, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@repo/ui";
 import { Button } from "@repo/ui";
 import { Skeleton } from "@repo/ui";
@@ -12,10 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   useApiServiceTypes,
+  useApiInstructors,
   useApiSchedules,
   useApiScheduleDetail,
   useCreateSchedule,
   useUpdateSchedule,
+  useDeleteSchedule,
   type ApiSchedule,
   type ApiBooking,
 } from "@repo/store";
@@ -38,20 +40,31 @@ const bookingStatusConfig: Record<string, { icon: typeof CheckCircle2; className
 };
 
 const emptySlotForm = {
-  serviceTypeId: "", date: "",
+  serviceTypeId: "", instructorId: "", date: "",
   startTime: "09:00", endTime: "10:00", capacity: "10",
-  locationNote: "",
+  locationNote: "", status: "available" as ApiSchedule["status"]
 };
 
 const ClassesPage = () => {
   const { data: serviceTypes = [] } = useApiServiceTypes();
+  const { data: instructors = [] } = useApiInstructors();
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [viewTab, setViewTab] = useState<"schedule" | "reservations">("schedule");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
 
   // Fetch schedules for the selected date
   const { data: allSchedules = [], isLoading: schedulesLoading } = useApiSchedules({ date: selectedDate });
+
+  const filteredSchedules = useMemo(() => {
+    return allSchedules.filter((s) => {
+      if (statusFilter !== "all" && s.status !== statusFilter) return false;
+      if (typeFilter !== "all" && s.service_type_id !== typeFilter) return false;
+      return true;
+    });
+  }, [allSchedules, statusFilter, typeFilter]);
 
   // Fetch detail (with bookings) for selected class
   const { data: scheduleDetail } = useApiScheduleDetail(selectedClassId);
@@ -60,6 +73,7 @@ const ClassesPage = () => {
 
   const createSchedule = useCreateSchedule();
   const updateSchedule = useUpdateSchedule();
+  const deleteSchedule = useDeleteSchedule();
 
   // Add slot dialog
   const [showAddSlot, setShowAddSlot] = useState(false);
@@ -72,6 +86,18 @@ const ClassesPage = () => {
   const getInstructorName = (s: ApiSchedule) => {
     if (!s.instructor) return "—";
     return `${s.instructor.first_name ?? ""} ${s.instructor.last_name ?? ""}`.trim() || s.instructor.email;
+  };
+
+  const handleDeleteSlot = async (id: string) => {
+    if (confirm("Are you sure you want to delete this timeslot? Associated bookings will be affected.")) {
+      try {
+        await deleteSchedule.mutateAsync(id);
+        toast.success("Timeslot deleted");
+        if (selectedClassId === id) setSelectedClassId(null);
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to delete timeslot");
+      }
+    }
   };
 
   const stats = useMemo(() => ({
@@ -96,6 +122,7 @@ const ClassesPage = () => {
         class_date: slotForm.date,
         start_time: slotForm.startTime,
         end_time: slotForm.endTime,
+        instructor_id: slotForm.instructorId === "none" ? undefined : (slotForm.instructorId || undefined),
         max_capacity: parseInt(slotForm.capacity) || 10,
         location_note: slotForm.locationNote || undefined,
       });
@@ -110,11 +137,13 @@ const ClassesPage = () => {
   const openEditSlot = (cls: ApiSchedule) => {
     setEditForm({
       serviceTypeId: cls.service_type_id,
+      instructorId: cls.instructor_id || "none",
       date: cls.class_date.split("T")[0],
       startTime: cls.start_time.slice(0, 5),
       endTime: cls.end_time.slice(0, 5),
       capacity: String(cls.max_capacity),
       locationNote: cls.location_note || "",
+      status: cls.status,
     });
     setEditSlotId(cls.id);
   };
@@ -128,8 +157,10 @@ const ClassesPage = () => {
         class_date: editForm.date,
         start_time: editForm.startTime,
         end_time: editForm.endTime,
+        instructor_id: editForm.instructorId === "none" ? null : (editForm.instructorId || null),
         max_capacity: parseInt(editForm.capacity) || 10,
         location_note: editForm.locationNote || null,
+        status: editForm.status,
       });
       setEditSlotId(null);
       setSelectedClassId(null);
@@ -215,7 +246,36 @@ const ClassesPage = () => {
             <Plus className="h-3.5 w-3.5" /> Add Timeslot
           </Button>
         </div>
+        
         <div className="flex items-center gap-1.5 ml-auto">
+          {/* Filters */}
+          <div className="flex gap-2 mr-2 border-r border-border pr-4">
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="h-9 w-[150px] text-xs">
+                <SelectValue placeholder="All Classes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Classes</SelectItem>
+                {serviceTypes.map(st => (
+                  <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9 w-[130px] text-xs">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="available">Available</SelectItem>
+                <SelectItem value="almost_full">Almost Full</SelectItem>
+                <SelectItem value="full">Full</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2 h-9 px-4 font-medium border-border hover:border-primary/50 transition-colors">
@@ -236,62 +296,81 @@ const ClassesPage = () => {
       </div>
 
       {viewTab === "schedule" ? (
-        <div className="space-y-3">
-          {allSchedules.map((cls) => {
-            const fillPercent = cls.max_capacity > 0 ? Math.round((cls.booked_count / cls.max_capacity) * 100) : 0;
-            const isFull = cls.status === "full";
-            return (
-              <div
-                key={cls.id}
-                className={cn(
-                  "flex items-center gap-4 rounded-xl bg-card border border-border p-4 transition-all hover:shadow-md hover:border-primary/20",
-                  cls.status === "cancelled" && "opacity-60"
-                )}
-              >
-                <div className="w-20 text-center rounded-lg bg-muted/50 py-2">
-                  <p className="text-sm font-bold text-foreground">{cls.start_time.slice(0, 5)}</p>
-                  <p className="text-[10px] text-muted-foreground">{cls.end_time.slice(0, 5)}</p>
-                </div>
-
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelectedClassId(cls.id)}>
-                  <div className="flex items-center gap-2">
-                    <span className="font-display text-sm font-bold text-foreground">{cls.service_type?.name ?? "—"}</span>
-                    {isFull && (
-                      <span className="rounded-full bg-destructive/10 border border-destructive/20 px-2 py-0.5 text-[10px] font-semibold text-destructive">FULL</span>
-                    )}
-                    {cls.status === "cancelled" && (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">CANCELLED</span>
-                    )}
-                    {cls.status === "almost_full" && (
-                      <span className="rounded-full bg-amber-100 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">ALMOST FULL</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {getInstructorName(cls)}
-                    {cls.location_note && ` · ${cls.location_note}`}
-                  </p>
-                </div>
-
-                <div className="w-32">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-muted-foreground">{cls.booked_count}/{cls.max_capacity}</span>
-                    <span className="font-medium text-foreground">{fillPercent}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className={cn("h-full rounded-full transition-all", isFull ? "bg-destructive" : "bg-primary")}
-                      style={{ width: `${Math.min(fillPercent, 100)}%` }}
-                    />
-                  </div>
-                </div>
-
-                <ChevronRight className="h-4 w-4 text-muted-foreground cursor-pointer" onClick={() => setSelectedClassId(cls.id)} />
-              </div>
-            );
-          })}
-          {allSchedules.length === 0 && (
-            <div className="py-16 text-center text-sm text-muted-foreground">No classes scheduled for this date</div>
-          )}
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border bg-muted/30">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Session</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Schedule</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Capacity</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                <th className="px-6 py-4 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {filteredSchedules.map((cls) => {
+                const isFull = cls.status === "full";
+                const isCancelled = cls.status === "cancelled";
+                return (
+                  <tr key={cls.id} className={cn("group hover:bg-muted/30 transition-colors", isCancelled && "opacity-60")}>
+                    <td className="px-6 py-4">
+                      <div 
+                        className="font-bold text-foreground text-[15px] mb-1 cursor-pointer hover:underline" 
+                        onClick={() => setSelectedClassId(cls.id)}
+                      >
+                        {cls.service_type?.name ?? "Class"}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                        <span>{getInstructorName(cls)}</span>
+                        <span>·</span>
+                        <span className="font-bold uppercase tracking-wider rounded-md bg-emerald-100/80 text-emerald-700 px-1.5 py-0.5 text-[10px]">
+                          {cls.service_type?.name ?? "GROUP"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 space-y-1">
+                      <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>{format(new Date(cls.class_date), "d MMM")}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>{cls.start_time.slice(0, 5)}–{cls.end_time.slice(0, 5)}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
+                        <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>{cls.booked_count}/{cls.max_capacity}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={cn("inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-wide capitalize", statusColors[cls.status])}>
+                        {cls.status.replace("_", " ")}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openEditSlot(cls)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDeleteSlot(cls.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredSchedules.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-16 text-center text-sm text-muted-foreground">
+                    No classes scheduled for this date
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       ) : (
         /* Bookings view — show all bookings for schedules on this date */
@@ -307,7 +386,7 @@ const ClassesPage = () => {
               </tr>
             </thead>
             <tbody>
-              {allSchedules.flatMap((s) =>
+              {filteredSchedules.flatMap((s) =>
                 (s.bookings ?? []).map((b) => {
                   const StatusIcon = bookingStatusConfig[b.status]?.icon || AlertCircle;
                   const userName = b.user ? `${b.user.first_name ?? ""} ${b.user.last_name ?? ""}`.trim() || b.user.email : "—";
@@ -331,8 +410,8 @@ const ClassesPage = () => {
               )}
             </tbody>
           </table>
-          {allSchedules.flatMap(s => s.bookings ?? []).length === 0 && (
-            <div className="py-12 text-center text-sm text-muted-foreground">No bookings for this date</div>
+          {filteredSchedules.flatMap(s => s.bookings ?? []).length === 0 && (
+            <div className="py-12 text-center text-sm text-muted-foreground">No bookings found with current filters</div>
           )}
         </div>
       )}
@@ -431,19 +510,44 @@ const ClassesPage = () => {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Edit Timeslot</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1.5"><Label>Service Type</Label>
-              <Select value={editForm.serviceTypeId} onValueChange={(v) => setEditForm(f => ({ ...f, serviceTypeId: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{serviceTypes.map(st => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}</SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Service Type</Label>
+                <Select value={editForm.serviceTypeId} onValueChange={(v) => setEditForm(f => ({ ...f, serviceTypeId: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{serviceTypes.map(st => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label>Instructor (Optional)</Label>
+                <Select value={editForm.instructorId || "none"} onValueChange={(v) => setEditForm(f => ({ ...f, instructorId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select instructor" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {instructors.map(st => <SelectItem key={st.id} value={st.id}>{st.first_name} {st.last_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={editForm.date} onChange={(e) => setEditForm(f => ({ ...f, date: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>Start</Label><Input type="time" value={editForm.startTime} onChange={(e) => setEditForm(f => ({ ...f, startTime: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>End</Label><Input type="time" value={editForm.endTime} onChange={(e) => setEditForm(f => ({ ...f, endTime: e.target.value }))} /></div>
             </div>
-            <div className="space-y-1.5"><Label>Capacity</Label><Input type="number" value={editForm.capacity} onChange={(e) => setEditForm(f => ({ ...f, capacity: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Location Note</Label><Input value={editForm.locationNote} onChange={(e) => setEditForm(f => ({ ...f, locationNote: e.target.value }))} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Capacity</Label><Input type="number" value={editForm.capacity} onChange={(e) => setEditForm(f => ({ ...f, capacity: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Location Note</Label><Input value={editForm.locationNote} onChange={(e) => setEditForm(f => ({ ...f, locationNote: e.target.value }))} /></div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <Select value={editForm.status} onValueChange={(v: ApiSchedule["status"]) => setEditForm(f => ({ ...f, status: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="available">Available</SelectItem>
+                  <SelectItem value="almost_full">Almost Full</SelectItem>
+                  <SelectItem value="full">Full</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditSlotId(null)}>Cancel</Button>
@@ -460,11 +564,22 @@ const ClassesPage = () => {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Add Class Timeslot</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1.5"><Label>Service Type</Label>
-              <Select value={slotForm.serviceTypeId} onValueChange={(v) => setSlotForm(f => ({ ...f, serviceTypeId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select service type" /></SelectTrigger>
-                <SelectContent>{serviceTypes.map(st => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}</SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Service Type</Label>
+                <Select value={slotForm.serviceTypeId} onValueChange={(v) => setSlotForm(f => ({ ...f, serviceTypeId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select service type" /></SelectTrigger>
+                  <SelectContent>{serviceTypes.map(st => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label>Instructor (Optional)</Label>
+                <Select value={slotForm.instructorId || "none"} onValueChange={(v) => setSlotForm(f => ({ ...f, instructorId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select instructor" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {instructors.map(st => <SelectItem key={st.id} value={st.id}>{st.first_name} {st.last_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={slotForm.date} onChange={(e) => setSlotForm(f => ({ ...f, date: e.target.value }))} /></div>
