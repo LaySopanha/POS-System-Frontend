@@ -12,6 +12,7 @@ export * from "./data/apiSettings";
 export * from "./data/apiReports";
 export * from "./data/apiNotifications";
 export * from "./data/apiWellnessServiceTypes";
+export * from "./data/apiStaff";
 export * from "./data/apiWellnessPackages";
 export * from "./data/apiSchedules";
 export * from "./data/apiUserPackages";

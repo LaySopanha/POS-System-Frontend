@@ -1285,7 +1285,7 @@ const RegisterPage = ({ userName = "" }: { userName?: string }) => {
                   <p className="text-xs font-bold uppercase tracking-widest opacity-40">Items Summary</p>
                   {selectedActivityOrder.items.map((item, i) => (
                     <div key={i} className="flex justify-between items-center text-sm py-1 border-b border-border/50">
-                      <span className="font-medium">{item.quantity}Ã— {item.product?.name ?? 'Unknown'}</span>
+                      <span className="font-medium">{item.quantity}x {item.product?.name ?? 'Unknown'}</span>
                       <span className="font-mono">${parseFloat(item.subtotal).toFixed(2)}</span>
                     </div>
                   ))}

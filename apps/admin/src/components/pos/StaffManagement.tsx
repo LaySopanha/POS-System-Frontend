@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import {
     UserPlus,
     Search,
@@ -39,32 +39,24 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@repo/ui";
-import { api } from "@repo/store";
+import { type ApiStaffMember, useApiStaff, staffQueryKeys, api } from "@repo/store";
+import { useQueryClient } from "@tanstack/react-query";
 
-interface StaffMember {
-    id: string;
-    first_name: string;
-    last_name: string;
-    email: string;
-    phone: string | null;
-    role: "admin" | "staff" | "instructor";
-    is_active: boolean;
-    created_at: string;
-}
 
 interface StaffManagementProps {
     currentUserId?: string | null;
 }
 
 const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
-    const [staff, setStaff] = useState<StaffMember[]>([]);
+    const qc = useQueryClient();
+    const { data: staff = [], isLoading: loading } = useApiStaff();
+    
     const [searchQuery, setSearchQuery] = useState("");
     const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false);
-    const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [editingStaff, setEditingStaff] = useState<ApiStaffMember | null>(null);
     const [saving, setSaving] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const [confirmMember, setConfirmMember] = useState<StaffMember | null>(null);
+    const [confirmMember, setConfirmMember] = useState<ApiStaffMember | null>(null);
 
     // Form states
     const [formData, setFormData] = useState({
@@ -76,37 +68,20 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
         role: "staff" as "admin" | "staff" | "instructor"
     });
 
-    const fetchStaff = useCallback(async () => {
-        try {
-            setLoading(true);
-            const res = await api.get<{ data: StaffMember[] }>("/admin/users?role=admin,staff,instructor");
-            // The endpoint returns paginated data
-            const data = (res as any).data ?? (res as any);
-            setStaff(Array.isArray(data) ? data : []);
-        } catch {
-            toast.error("Failed to load staff members");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchStaff();
-    }, [fetchStaff]);
 
     const filteredStaff = staff.filter(s => {
-        const fullName = `${s.first_name} ${s.last_name}`.toLowerCase();
+        const fullName = `${s.first_name ?? ""} ${s.last_name ?? ""}`.toLowerCase();
         const q = searchQuery.toLowerCase();
         return fullName.includes(q) || s.email.toLowerCase().includes(q);
     });
 
     // Count active admins so we can protect the last one
     const activeAdminCount = staff.filter(s => s.role === "admin" && s.is_active).length;
-    const isLastActiveAdmin = (member: StaffMember) =>
+    const isLastActiveAdmin = (member: ApiStaffMember) =>
         member.role === "admin" && member.is_active && activeAdminCount <= 1;
-    const isSelf = (member: StaffMember) => member.id === currentUserId;
+    const isSelf = (member: ApiStaffMember) => member.id === currentUserId;
 
-    const getInitials = (firstName: string, lastName: string) => {
+    const getInitials = (firstName: string | null, lastName: string | null) => {
         return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase();
     };
 
@@ -117,11 +92,11 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
         setIsStaffDialogOpen(true);
     };
 
-    const handleOpenEdit = (member: StaffMember) => {
+    const handleOpenEdit = (member: ApiStaffMember) => {
         setEditingStaff(member);
         setFormData({
-            first_name: member.first_name,
-            last_name: member.last_name,
+            first_name: member.first_name ?? "",
+            last_name: member.last_name ?? "",
             email: member.email,
             phone: member.phone ?? "",
             password: "",
@@ -172,7 +147,7 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
                 toast.success("Staff member created successfully");
             }
             setIsStaffDialogOpen(false);
-            fetchStaff();
+            qc.invalidateQueries({ queryKey: staffQueryKeys.all });
         } catch (err: any) {
             const message = err?.body?.message ?? "Failed to save staff member";
             toast.error(message);
@@ -181,7 +156,7 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
         }
     };
 
-    const handleToggleStatus = async (member: StaffMember) => {
+    const handleToggleStatus = async (member: ApiStaffMember) => {
         // For deactivation, show confirmation first
         if (member.is_active) {
             setConfirmMember(member);
@@ -191,7 +166,7 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
         try {
             await api.post(`/admin/users/${member.id}/activate`);
             toast.success("Staff member activated");
-            fetchStaff();
+            qc.invalidateQueries({ queryKey: staffQueryKeys.all });
         } catch (err: any) {
             toast.error(err?.body?.message ?? "Failed to activate staff member");
         }
@@ -204,7 +179,7 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
         try {
             await api.post(`/admin/users/${member.id}/deactivate`);
             toast.success(`${member.first_name} ${member.last_name} has been deactivated`);
-            fetchStaff();
+            qc.invalidateQueries({ queryKey: staffQueryKeys.all });
         } catch (err: any) {
             toast.error(err?.body?.message ?? "Failed to deactivate staff member");
         }
