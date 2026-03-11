@@ -11,7 +11,7 @@ import { cn } from "@repo/ui";
 import { toast } from "@repo/ui";
 import { classTypes } from "@repo/store";
 import { AccountTab, PurchasedPackage, BookedClass, PaymentRecord } from "@/types/zen-portal.ts";
-import type { LoyaltyInfo } from "@/hooks/use-customer-api";
+import type { LoyaltyInfo, CustomerStats } from "@/hooks/use-customer-api";
 import { useUpdateProfile } from "@/hooks/use-customer-api";
 
 interface AccountPageProps {
@@ -37,6 +37,7 @@ interface AccountPageProps {
     sessionsRemaining: number;
     allowedClassTypes: string[];
     loyaltyData?: LoyaltyInfo;
+    statsData?: CustomerStats;
 }
 
 const AccountPage: React.FC<AccountPageProps> = ({
@@ -61,6 +62,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
     sessionsRemaining: totalSessionsRemaining,
     allowedClassTypes,
     loyaltyData,
+    statsData,
 }) => {
     const { t, i18n } = useTranslation();
     const [expandedBookingId, setExpandedBookingId] = React.useState<string | null>(null);
@@ -711,44 +713,40 @@ const AccountPage: React.FC<AccountPageProps> = ({
                 {/* 5. PROGRESS */}
                 {accountTab === "progress" && (
                     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-400">
-                        {/* Overall Stats */}
+                        {/* Total Classes Circle */}
                         <div className="bg-card border border-border rounded-[2.5rem] p-8 shadow-sm space-y-8">
                             <div className="text-center space-y-2">
-                                <div className="mx-auto w-24 h-24 rounded-full border-[6px] border-primary/10 border-t-primary flex items-center justify-center">
-                                    <span className="text-3xl font-black">{totalClasses}</span>
+                                <div className="mx-auto w-28 h-28 rounded-full border-[6px] border-primary/10 border-t-primary flex items-center justify-center">
+                                    <span className="text-4xl font-black">{statsData?.total_completed ?? 0}</span>
                                 </div>
                                 <h3 className="text-lg font-bold text-foreground tracking-tight">{t('your_progress_score')}</h3>
-                                <p className="text-xs text-muted-foreground">{t('keep_moving_desc')}</p>
+                                <p className="text-xs text-muted-foreground">{Math.floor((statsData?.total_hours ?? 0) / 60)}h {(statsData?.total_hours ?? 0) % 60}min of movement</p>
                             </div>
 
-                            {/* Loyalty Points Card */}
-                            {loyaltyData && (
-                                <div className="rounded-2xl bg-primary/5 border border-primary/10 p-5 flex items-center justify-between">
-                                    <div>
-                                        <p className="text-[9px] font-black text-primary uppercase tracking-widest">{loyaltyData.tier?.name || 'Member'} · {Math.round(loyaltyData.tier?.discount_percentage ?? 0)}% discount</p>
-                                        <p className="text-3xl font-black text-foreground mt-1">{loyaltyData.points_balance.toLocaleString()}</p>
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">points available</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <Trophy className="text-primary/50 ml-auto" size={36} />
-                                        <p className="text-[9px] font-bold text-muted-foreground mt-1 uppercase tracking-widest">{loyaltyData.total_points_earned.toLocaleString()} earned total</p>
-                                    </div>
+                            {/* Class Type Breakdown */}
+                            {(statsData?.by_class_type?.length ?? 0) > 0 ? (
+                                <div className="space-y-3">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground text-center">Classes by Type</p>
+                                    {statsData!.by_class_type.sort((a, b) => b.count - a.count).map((item) => {
+                                        const pct = Math.round((item.count / (statsData!.total_completed || 1)) * 100);
+                                        return (
+                                            <div key={item.type} className="space-y-1">
+                                                <div className="flex justify-between text-xs">
+                                                    <span className="font-semibold text-foreground">{item.type}</span>
+                                                    <span className="font-black text-muted-foreground">{item.count} classes</span>
+                                                </div>
+                                                <div className="h-2 bg-muted/50 rounded-full">
+                                                    <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="text-center py-4 text-xs text-muted-foreground opacity-60">
+                                    Complete your first class to see your breakdown!
                                 </div>
                             )}
-
-                            <div className="grid grid-cols-3 gap-2">
-                                {[
-                                    { label: t('total_hours'), value: (totalClasses * 50 / 60).toFixed(1), icon: Clock },
-                                    { label: 'Loyalty Points', value: loyaltyData?.points_balance?.toLocaleString() ?? '—', icon: TrendingUp },
-                                    { label: 'Tier', value: loyaltyData?.tier?.name ?? '—', icon: Trophy },
-                                ].map((stat, i) => (
-                                    <div key={i} className="bg-muted/30 rounded-2xl p-4 text-center space-y-1">
-                                        <stat.icon className="mx-auto text-primary/70 mb-1" size={16} />
-                                        <p className="text-base font-black text-foreground">{stat.value}</p>
-                                        <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest leading-tight">{stat.label}</p>
-                                    </div>
-                                ))}
-                            </div>
                         </div>
 
                         {/* Milestones Progress */}
@@ -756,61 +754,73 @@ const AccountPage: React.FC<AccountPageProps> = ({
                             <h4 className="text-[10px] font-black uppercase tracking-widest text-zen-dark/40 text-center">{t('milestones_status')}</h4>
                             <div className="relative pt-2">
                                 <div className="h-2 bg-zen-dark/10 rounded-full w-full">
-                                    <div className="h-full bg-matcha rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, (totalClasses / 100) * 100)}%` }}></div>
+                                    <div className="h-full bg-matcha rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, ((statsData?.total_completed ?? 0) / 100) * 100)}%` }}></div>
                                 </div>
                                 <div className="flex justify-between mt-4">
                                     {[10, 25, 50, 75, 100].map(m => (
                                         <div key={m} className="flex flex-col items-center gap-1">
-                                            <div className={cn("w-2 h-2 rounded-full", totalClasses >= m ? "bg-matcha" : "bg-zen-dark/10")}></div>
-                                            <span className={cn("text-[9px] font-black", totalClasses >= m ? "text-matcha" : "text-zen-dark/30")}>{m}</span>
+                                            <div className={cn("w-2 h-2 rounded-full", (statsData?.total_completed ?? 0) >= m ? "bg-matcha" : "bg-zen-dark/10")}></div>
+                                            <span className={cn("text-[9px] font-black", (statsData?.total_completed ?? 0) >= m ? "text-matcha" : "text-zen-dark/30")}>{m}</span>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         </div>
 
-                        {/* Recent Milestones */}
+                        {/* Achievements */}
                         <div className="rounded-[2.5rem] bg-accent/20 border border-primary/10 p-8">
                             <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-6">{t('unlocked_achievements')}</h4>
                             <div className="space-y-6">
-                                <div className="flex gap-4 items-center">
-                                    <div className="h-14 w-14 rounded-2xl bg-yellow-400/20 flex items-center justify-center text-yellow-600 border border-yellow-200 shadow-sm rotate-3">
-                                        <Star size={28} fill="currentColor" />
-                                    </div>
-                                    <div>
-                                        <p className="text-base font-bold text-foreground">{t('first_timer_badge')}</p>
-                                        <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">{t('unlocked')} 15 Feb 2026</p>
-                                    </div>
-                                </div>
-                                <div className="flex gap-4 items-center opacity-30 grayscale -rotate-2">
-                                    <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground border border-border">
-                                        <Trophy size={28} />
-                                    </div>
-                                    <div>
-                                        <p className="text-base font-bold text-foreground">{t('master_pilates_100')}</p>
-                                        <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">{t('in_progress')} {totalClasses}/100</p>
-                                    </div>
-                                </div>
+                                {[10, 25, 50, 75, 100].map(m => {
+                                    const unlocked = (statsData?.total_completed ?? 0) >= m;
+                                    const labels: Record<number, string> = {
+                                        10: 'Explorer — 10 Classes',
+                                        25: 'Dedicated — 25 Classes',
+                                        50: 'Committed — 50 Classes',
+                                        75: 'Advanced — 75 Classes',
+                                        100: 'Master — 100 Classes',
+                                    };
+                                    return (
+                                        <div key={m} className={cn("flex gap-4 items-center", !unlocked && "opacity-30 grayscale")}>
+                                            <div className={cn("h-14 w-14 rounded-2xl flex items-center justify-center border shadow-sm", unlocked ? "bg-yellow-400/20 text-yellow-600 border-yellow-200" : "bg-muted text-muted-foreground border-border")}>
+                                                {unlocked ? <Star size={28} fill="currentColor" /> : <Trophy size={28} />}
+                                            </div>
+                                            <div>
+                                                <p className="text-base font-bold text-foreground">{labels[m]}</p>
+                                                <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">
+                                                    {unlocked ? `✓ ${t('unlocked')}` : `${t('in_progress')} ${statsData?.total_completed ?? 0}/${m}`}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
 
-                        {/* Favorite Class Logic */}
+                        {/* Favorite Class */}
                         <div className="bg-card border border-border rounded-[2.5rem] p-8 flex flex-col gap-6">
                             <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t('your_favorite_movement')}</h4>
-                            <div className="flex items-center gap-5">
-                                <div className="h-20 w-20 rounded-[1.5rem] bg-matcha/10 flex items-center justify-center text-matcha">
-                                    <Star size={32} />
+                            {statsData?.favorite_class ? (
+                                <div className="flex items-center gap-5">
+                                    <div className="h-20 w-20 rounded-[1.5rem] bg-matcha/10 flex items-center justify-center text-matcha">
+                                        <Star size={32} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-2xl font-black text-foreground tracking-tight capitalize">
+                                            {statsData.favorite_class}
+                                        </p>
+                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('most_attended_class')}</p>
+                                        <p className="text-[10px] text-muted-foreground">
+                                            {statsData.by_class_type.find(t => t.type === statsData.favorite_class)?.count ?? 0} sessions attended
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="space-y-1">
-                                    <p className="text-2xl font-black text-foreground tracking-tight capitalize">
-                                        {Object.entries(bookedClasses.reduce((acc, b) => {
-                                            if (b.status === "completed") acc[b.classTypeId] = (acc[b.classTypeId] || 0) + 1;
-                                            return acc;
-                                        }, {} as Record<string, number>)).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Reformer'}
-                                    </p>
-                                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('most_attended_class')}</p>
+                            ) : (
+                                <div className="text-center py-6 opacity-50">
+                                    <Star size={32} className="mx-auto text-muted-foreground mb-2" />
+                                    <p className="text-xs text-muted-foreground">Your favorite class will appear here after you complete sessions</p>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </div>
                 )}

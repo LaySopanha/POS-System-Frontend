@@ -11,6 +11,7 @@ import {
     useMyLoyalty,
     useMyLoyaltyHistory,
     useMyPayments,
+    useMyStats,
     usePurchasePackage,
     useBookClass,
     useCancelBooking,
@@ -68,6 +69,7 @@ export const useZenPortal = () => {
     const { data: loyaltyData } = useMyLoyalty(isAuthenticated);
     const { data: loyaltyHistory } = useMyLoyaltyHistory(isAuthenticated);
     const { data: apiPayments } = useMyPayments(isAuthenticated);
+    const { data: statsData } = useMyStats(isAuthenticated);
 
     // Mutations
     const purchaseMutation = usePurchasePackage();
@@ -553,6 +555,7 @@ export const useZenPortal = () => {
         setPendingConfirmEmail,
         loyaltyData,
         loyaltyHistory,
+        statsData,
         t
     };
 };

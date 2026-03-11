@@ -289,3 +289,29 @@ export function useMyPayments(enabled = true) {
         staleTime: 60 * 1000,
     });
 }
+
+// ─── Class Attendance Stats (for My Progress tab) ─────────────────────────────
+
+export interface CustomerStats {
+    total_completed: number;
+    total_hours: number;
+    by_class_type: { type: string; count: number }[];
+    favorite_class: string | null;
+    next_milestone: number | null;
+}
+
+/**
+ * Fetch the customer's class attendance statistics for the Progress tab.
+ */
+export function useMyStats(enabled = true) {
+    return useQuery({
+        queryKey: ["customer", "stats"],
+        queryFn: () =>
+            api
+                .get<{ data: CustomerStats }>("/customer/stats")
+                .then((r) => r.data),
+        enabled,
+        staleTime: 5 * 60 * 1000,
+    });
+}
+
