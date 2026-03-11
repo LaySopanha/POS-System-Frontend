@@ -21,6 +21,16 @@ RUN npm install
 COPY packages ./packages
 COPY apps/web ./apps/web
 
+# Accept build arguments
+ARG VITE_API_BASE_URL
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+
+# Expose them as environment variables during the build
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
 # Build the web app
 RUN npm run build --workspace=web
 
