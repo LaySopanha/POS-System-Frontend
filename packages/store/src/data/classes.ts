@@ -28,7 +28,7 @@ export interface Reservation {
   customerId: string;
   date: string;
   time: string;
-  status: "confirmed" | "waitlisted" | "cancelled" | "attended" | "no-show";
+  status: "confirmed" | "waitlisted" | "cancelled" | "late-cancel" | "attended" | "no-show";
   bookedAt: string;
 }
 
@@ -40,71 +40,93 @@ export const instructors: Instructor[] = [
 ];
 
 export const classSlots: ClassSlot[] = [
-  {
-    id: "cl1",
-    name: "Reformer",
-    instructor: instructors[1],
-    date: "2026-03-04",
-    startTime: "07:00",
-    endTime: "07:50",
-    capacity: 12,
-    status: "upcoming",
-    price: 22.00,
-    classTypeId: "reformer",
-    description: "Full body reformer session.",
-  },
-  {
-    id: "cl2",
-    name: "Cadillac",
-    instructor: instructors[0],
-    date: "2026-03-04",
-    startTime: "09:00",
-    endTime: "09:50",
-    capacity: 12,
-    status: "upcoming",
-    price: 22.00,
-    classTypeId: "reformer",
-    description: "Morning strength on the reformer.",
-  },
-  {
-    id: "cl3",
-    name: "Hot Pilates",
-    instructor: instructors[2],
-    date: "2026-03-04",
-    startTime: "11:00",
-    endTime: "11:50",
-    capacity: 10,
-    status: "upcoming",
-    price: 25.00,
-    classTypeId: "cadillac",
-    description: "Controlled movements focus.",
-  },
-  {
-    id: "cl4",
-    name: "Barre",
-    instructor: instructors[1],
-    date: "2026-03-04",
-    startTime: "12:30",
-    endTime: "13:20",
-    capacity: 15,
-    status: "upcoming",
-    price: 19.00,
-    classTypeId: "barre",
-    description: "Post-lunch high-rep conditioning.",
-  },
-  {
-    id: "cl5",
-    name: "Recovery Lounge",
-    instructor: instructors[0],
-    date: "2026-03-04",
-    startTime: "18:00",
-    endTime: "18:50",
-    capacity: 12,
-    status: "upcoming",
-    price: 22.00,
-    classTypeId: "reformer",
-    description: "Evening group session.",
-  },
+  ...[
+    "2026-03-09",
+    "2026-03-10",
+    "2026-03-11",
+    "2026-03-12",
+    "2026-03-13",
+    "2026-03-14",
+    "2026-03-15",
+  ].flatMap((date) => {
+    const hourlySlots: ClassSlot[] = [];
+    const types = ["reformer", "cadillac", "hot-pilates", "barre", "recovery-lounge"];
+
+    // Add multiple sessions for each type every day
+    types.forEach((type, tIdx) => {
+      // Morning Session
+      hourlySlots.push({
+        id: `cl-${date}-${type}-am`,
+        name: `${type.charAt(0).toUpperCase() + type.slice(1).replace('-', ' ')} morning`,
+        instructor: instructors[tIdx % 3],
+        date,
+        startTime: "08:00",
+        endTime: "08:50",
+        capacity: 10,
+        status: "upcoming",
+        price: 25.0,
+        classTypeId: type,
+        description: "Engaging morning session."
+      });
+      // Lunch Session
+      hourlySlots.push({
+        id: `cl-${date}-${type}-noon`,
+        name: `${type.charAt(0).toUpperCase() + type.slice(1).replace('-', ' ')} Lunch`,
+        instructor: instructors[(tIdx + 1) % 3],
+        date,
+        startTime: "12:00",
+        endTime: "12:50",
+        capacity: 10,
+        status: "upcoming",
+        price: 25.0,
+        classTypeId: type,
+        description: "Focus on movement during lunch."
+      });
+      // Afternoon Session
+      hourlySlots.push({
+        id: `cl-${date}-${type}-pm1`,
+        name: `${type.charAt(0).toUpperCase() + type.slice(1).replace('-', ' ')} Power`,
+        instructor: instructors[(tIdx + 2) % 3],
+        date,
+        startTime: "15:00",
+        endTime: "15:50",
+        capacity: 12,
+        status: "upcoming",
+        price: 25.0,
+        classTypeId: type,
+        description: "Afternoon energy boost."
+      });
+      // Evening Session
+      hourlySlots.push({
+        id: `cl-${date}-${type}-pm2`,
+        name: `${type.charAt(0).toUpperCase() + type.slice(1).replace('-', ' ')} Sunset`,
+        instructor: instructors[tIdx % 3],
+        date,
+        startTime: "18:00",
+        endTime: "18:50",
+        capacity: 8,
+        status: "upcoming",
+        price: 30.0,
+        classTypeId: type,
+        description: "Wind down with evening movement."
+      });
+      // Late Night Session
+      hourlySlots.push({
+        id: `cl-${date}-${type}-night`,
+        name: `${type.charAt(0).toUpperCase() + type.slice(1).replace('-', ' ')} Night`,
+        instructor: instructors[(tIdx + 1) % 3],
+        date,
+        startTime: "20:00",
+        endTime: "20:50",
+        capacity: 10,
+        status: "upcoming",
+        price: 22.0,
+        classTypeId: type,
+        description: "Final session of the day."
+      });
+    });
+    return hourlySlots;
+  })
 ];
 
 export const reservations: Reservation[] = [

@@ -47,7 +47,6 @@ const Sidebar = ({ activeTab, onTabChange, ordersBadge, inboxBadge, onLogout, us
           src={settings?.logo_url || "/images/zh-logo.png"}
           alt="Logo"
           className="h-20 w-20 object-contain"
-          fetchPriority="high"
           loading="eager"
           decoding="sync"
         />

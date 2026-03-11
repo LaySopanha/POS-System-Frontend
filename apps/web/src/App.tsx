@@ -1,8 +1,10 @@
-import { Component } from "react";
+import { Component, useEffect } from "react";
 import type { ReactNode, ErrorInfo } from "react";
-import { Toaster, Sonner, TooltipProvider } from "@repo/ui";
+import { Toaster, Sonner, TooltipProvider, toast } from "@repo/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./hooks/use-auth";
+import { supabase } from "@repo/store";
 import ZenHome from "./pages/ZenHome";
 import NotFound from "./pages/NotFound";
 
@@ -36,30 +38,58 @@ const queryClient = new QueryClient({
   },
 });
 
+// Listener to catch email confirmation redirects and show a welcome toast
+const GlobalAuthListener = () => {
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        // Only show if it looks like a fresh login or confirmation, not a token refresh
+        const isFreshLogin = !sessionStorage.getItem("zen_logged_in");
+        if (isFreshLogin) {
+          const name = session.user.user_metadata?.first_name || "there";
+          toast.success(`Welcome to Zen House, ${name}!`);
+          sessionStorage.setItem("zen_logged_in", "true");
+        }
+      }
+      if (event === "SIGNED_OUT") {
+        sessionStorage.removeItem("zen_logged_in");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+  
+  return null;
+};
+
 const App = () => (
     <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-            <Toaster />
-            <Sonner position="top-right" />
-            <BrowserRouter>
-                <ErrorBoundary>
-                <Routes>
-                    <Route path="/" element={<ZenHome />} />
-                    <Route path="/pricing" element={<ZenHome />} />
-                    <Route path="/packages" element={<ZenHome />} />
-                    <Route path="/packages/:id" element={<ZenHome />} />
-                    <Route path="/schedule" element={<ZenHome />} />
-                    <Route path="/book" element={<ZenHome />} />
-                    <Route path="/auth" element={<ZenHome />} />
-                    <Route path="/account" element={<ZenHome />} />
-                    <Route path="/guide" element={<ZenHome />} />
-                    <Route path="/contact" element={<ZenHome />} />
-                    <Route path="/success" element={<ZenHome />} />
-                    <Route path="*" element={<NotFound />} />
-                </Routes>
-                </ErrorBoundary>
-            </BrowserRouter>
-        </TooltipProvider>
+        <AuthProvider>
+            <TooltipProvider>
+                <GlobalAuthListener />
+                <Toaster />
+                <Sonner position="top-right" />
+                <BrowserRouter>
+                    <ErrorBoundary>
+                    <Routes>
+                        <Route path="/" element={<ZenHome />} />
+                        <Route path="/pricing" element={<ZenHome />} />
+                        <Route path="/packages" element={<ZenHome />} />
+                        <Route path="/packages/:id" element={<ZenHome />} />
+                        <Route path="/schedule" element={<ZenHome />} />
+                        <Route path="/book" element={<ZenHome />} />
+                        <Route path="/auth" element={<ZenHome />} />
+                        <Route path="/confirm-email" element={<ZenHome />} />
+                        <Route path="/account" element={<ZenHome />} />
+                        <Route path="/guide" element={<ZenHome />} />
+                        <Route path="/contact" element={<ZenHome />} />
+                        <Route path="/success" element={<ZenHome />} />
+                        <Route path="*" element={<NotFound />} />
+                    </Routes>
+                    </ErrorBoundary>
+                </BrowserRouter>
+            </TooltipProvider>
+        </AuthProvider>
     </QueryClientProvider>
 );
 

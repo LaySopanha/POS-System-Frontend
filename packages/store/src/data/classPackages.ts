@@ -29,6 +29,7 @@ export interface ClassPackage {
   remarks: string;
   duration: string;
   isIntro?: boolean;
+  isActive?: boolean;
 }
 
 export const classPackages: ClassPackage[] = [
@@ -43,7 +44,8 @@ export const classPackages: ClassPackage[] = [
     validity: "1 month",
     duration: "50 mins",
     remarks: "1 free recovery lounge session. Non-transferrable, non-refundable, non-sharable",
-    isIntro: true
+    isIntro: true,
+    isActive: true
   },
   {
     id: "ref-move-1",
@@ -54,7 +56,8 @@ export const classPackages: ClassPackage[] = [
     price: 22,
     validity: "1 week",
     duration: "50 mins",
-    remarks: "10% off on 1 recovery lounge session. Non-transferrable, non-refundable, non-sharable"
+    remarks: "10% off on 1 recovery lounge session. Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "ref-move-6",
@@ -65,7 +68,8 @@ export const classPackages: ClassPackage[] = [
     price: 120,
     validity: "2 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, non-sharable"
+    remarks: "Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "ref-move-12",
@@ -76,7 +80,8 @@ export const classPackages: ClassPackage[] = [
     price: 216,
     validity: "4 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, non-sharable"
+    remarks: "Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "ref-move-24",
@@ -87,7 +92,8 @@ export const classPackages: ClassPackage[] = [
     price: 384,
     validity: "5 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, non-sharable"
+    remarks: "Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "ref-move-30",
@@ -98,7 +104,8 @@ export const classPackages: ClassPackage[] = [
     price: 420,
     validity: "6 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, sharable up to 2 pax"
+    remarks: "Non-transferrable, non-refundable, sharable up to 2 pax",
+    isActive: true
   },
 
   // Cadillac
@@ -112,7 +119,8 @@ export const classPackages: ClassPackage[] = [
     validity: "1 month",
     duration: "50 mins",
     remarks: "1 free recovery lounge session. Non-transferrable, non-refundable, non-sharable",
-    isIntro: true
+    isIntro: true,
+    isActive: true
   },
   {
     id: "cad-move-1",
@@ -123,7 +131,8 @@ export const classPackages: ClassPackage[] = [
     price: 25,
     validity: "1 week",
     duration: "50 mins",
-    remarks: "10% off on 1 recovery lounge session. Non-transferrable, non-refundable, non-sharable"
+    remarks: "10% off on 1 recovery lounge session. Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "cad-move-6",
@@ -134,7 +143,8 @@ export const classPackages: ClassPackage[] = [
     price: 138,
     validity: "2 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, non-sharable"
+    remarks: "Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "cad-move-12",
@@ -145,7 +155,8 @@ export const classPackages: ClassPackage[] = [
     price: 252,
     validity: "4 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, non-sharable"
+    remarks: "Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "cad-move-24",
@@ -156,7 +167,8 @@ export const classPackages: ClassPackage[] = [
     price: 456,
     validity: "5 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, non-sharable"
+    remarks: "Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "cad-move-30",
@@ -167,7 +179,8 @@ export const classPackages: ClassPackage[] = [
     price: 540,
     validity: "6 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, sharable up to 2 pax"
+    remarks: "Non-transferrable, non-refundable, sharable up to 2 pax",
+    isActive: true
   },
 
   // Hot Pilates
@@ -181,7 +194,8 @@ export const classPackages: ClassPackage[] = [
     validity: "1 month",
     duration: "50 mins",
     remarks: "1 free recovery lounge session. Non-transferrable, non-refundable, non-sharable",
-    isIntro: true
+    isIntro: true,
+    isActive: true
   },
   {
     id: "hot-move-1",
@@ -192,7 +206,8 @@ export const classPackages: ClassPackage[] = [
     price: 20,
     validity: "1 week",
     duration: "50 mins",
-    remarks: "10% off on 1 recovery lounge session. Non-transferrable, non-refundable, non-sharable"
+    remarks: "10% off on 1 recovery lounge session. Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "hot-move-6",
@@ -203,7 +218,8 @@ export const classPackages: ClassPackage[] = [
     price: 108,
     validity: "2 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, non-sharable"
+    remarks: "Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "hot-move-12",
@@ -214,7 +230,8 @@ export const classPackages: ClassPackage[] = [
     price: 192,
     validity: "4 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, non-sharable"
+    remarks: "Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "hot-move-24",
@@ -225,7 +242,8 @@ export const classPackages: ClassPackage[] = [
     price: 336,
     validity: "5 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, non-sharable"
+    remarks: "Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "hot-move-30",
@@ -236,7 +254,8 @@ export const classPackages: ClassPackage[] = [
     price: 360,
     validity: "6 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, sharable up to 2 pax"
+    remarks: "Non-transferrable, non-refundable, sharable up to 2 pax",
+    isActive: true
   },
 
   // Barre
@@ -250,7 +269,8 @@ export const classPackages: ClassPackage[] = [
     validity: "1 month",
     duration: "50 mins",
     remarks: "1 free recovery lounge session. Non-transferrable, non-refundable, non-sharable",
-    isIntro: true
+    isIntro: true,
+    isActive: true
   },
   {
     id: "barre-move-1",
@@ -261,7 +281,8 @@ export const classPackages: ClassPackage[] = [
     price: 19,
     validity: "1 week",
     duration: "50 mins",
-    remarks: "10% off on 1 recovery lounge session. Non-transferrable, non-refundable, non-sharable"
+    remarks: "10% off on 1 recovery lounge session. Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "barre-move-6",
@@ -272,7 +293,8 @@ export const classPackages: ClassPackage[] = [
     price: 102,
     validity: "2 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, non-sharable"
+    remarks: "Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "barre-move-12",
@@ -283,7 +305,8 @@ export const classPackages: ClassPackage[] = [
     price: 180,
     validity: "4 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, non-sharable"
+    remarks: "Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "barre-move-24",
@@ -294,7 +317,8 @@ export const classPackages: ClassPackage[] = [
     price: 312,
     validity: "5 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, non-sharable"
+    remarks: "Non-transferrable, non-refundable, non-sharable",
+    isActive: true
   },
   {
     id: "barre-move-30",
@@ -305,13 +329,14 @@ export const classPackages: ClassPackage[] = [
     price: 330,
     validity: "6 months",
     duration: "50 mins",
-    remarks: "Non-transferrable, non-refundable, sharable up to 2 pax"
+    remarks: "Non-transferrable, non-refundable, sharable up to 2 pax",
+    isActive: true
   },
 
   // Recovery Lounge
-  { id: "rec-intro-3", classTypeId: "recovery-lounge", name: "Intro Recover 3", sessions: 3, price: 24, pricePerSession: 8, validity: "1 month", duration: "60 mins", remarks: "(Save $3) Non-transferrable, non-refundable, non-sharable", isIntro: true },
-  { id: "rec-move-1", classTypeId: "recovery-lounge", name: "Recover 1", sessions: 1, price: 9, pricePerSession: 9, validity: "1 week", duration: "60 mins", remarks: "Non-transferrable, non-refundable, non-sharable" },
-  { id: "rec-move-9", classTypeId: "recovery-lounge", name: "Recover 9", sessions: 9, price: 72, pricePerSession: 8, validity: "3 months", duration: "60 mins", remarks: "(Save $9) Non-transferrable, non-refundable, non-sharable" },
+  { id: "rec-intro-3", classTypeId: "recovery-lounge", name: "Intro Recover 3", sessions: 3, price: 24, pricePerSession: 8, validity: "1 month", duration: "60 mins", remarks: "(Save $3) Non-transferrable, non-refundable, non-sharable", isIntro: true, isActive: true },
+  { id: "rec-move-1", classTypeId: "recovery-lounge", name: "Recover 1", sessions: 1, price: 9, pricePerSession: 9, validity: "1 week", duration: "60 mins", remarks: "Non-transferrable, non-refundable, non-sharable", isActive: true },
+  { id: "rec-move-9", classTypeId: "recovery-lounge", name: "Recover 9", sessions: 9, price: 72, pricePerSession: 8, validity: "3 months", duration: "60 mins", remarks: "(Save $9) Non-transferrable, non-refundable, non-sharable", isActive: true },
 ];
 
 // ─── Membership packages ─────────────────────────────────────────────────────

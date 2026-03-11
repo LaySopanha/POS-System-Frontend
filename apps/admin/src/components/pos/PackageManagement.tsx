@@ -527,7 +527,7 @@ const PackageManagement = () => {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Sessions</Label><Input type="number" value={pkgForm.sessions} onChange={e => setPkgForm(f => ({ ...f, sessions: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>Total ($)</Label><Input type="number" value={pkgForm.totalPrice} onChange={e => setPkgForm(f => ({ ...f, totalPrice: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>Validity (days)</Label><Input type="number" value={pkgForm.validityDays} onChange={e => setPkgForm(f => ({ ...f, validityDays: e.target.value }))} /></div>

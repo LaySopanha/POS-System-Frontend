@@ -41,7 +41,7 @@ interface Store {
   };
 }
 
-const STORAGE_KEY = "zenhouse_store_v7";
+const STORAGE_KEY = "zenhouse_store_v8";
 
 function loadStore(): Store {
   try {

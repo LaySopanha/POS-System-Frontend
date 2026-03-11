@@ -35,6 +35,7 @@ const statusColors: Record<string, string> = {
 const bookingStatusConfig: Record<string, { icon: typeof CheckCircle2; className: string; label: string }> = {
   confirmed: { icon: CheckCircle2, className: "text-primary", label: "Confirmed" },
   cancelled: { icon: XCircle, className: "text-destructive", label: "Cancelled" },
+  "late-cancel": { icon: XCircle, className: "text-orange-500", label: "Late Cancel" },
   attended: { icon: CheckCircle2, className: "text-primary", label: "Attended" },
   no_show: { icon: UserX, className: "text-muted-foreground", label: "No-Show" },
 };
@@ -243,7 +244,7 @@ const ClassesPage = () => {
             ))}
           </div>
           <Button size="sm" onClick={openAddSlot} className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" /> Add Timeslot
+            <Plus className="h-3.5 w-3.5" /> Add Session
           </Button>
         </div>
         
@@ -379,7 +380,7 @@ const ClassesPage = () => {
             <thead>
               <tr className="border-b border-border bg-muted/30">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Customer</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Class</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Session</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Time</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Booked</th>
@@ -562,7 +563,7 @@ const ClassesPage = () => {
       {/* Add Timeslot Dialog */}
       <Dialog open={showAddSlot} onOpenChange={setShowAddSlot}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Add Class Timeslot</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Add New Session</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Service Type</Label>
