@@ -1,38 +1,42 @@
-FROM node:20-alpine
+# Use Node 20 alpine as base
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy root package files
-COPY package.json package-lock.json* ./
-COPY turbo.json ./
+# Enable corepack for pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Copy all workspace package manifests (for workspace resolution)
-COPY apps/web/package.json ./apps/web/
-COPY apps/admin/package.json ./apps/admin/
+# Copy workspace config and install dependencies
+COPY pnpm-lock.yaml package.json pnpm-workspace.yaml turbo.json ./
 COPY packages/store/package.json ./packages/store/
 COPY packages/ui/package.json ./packages/ui/
-COPY packages/config-tailwind/package.json ./packages/config-tailwind/
-COPY packages/config-typescript/package.json ./packages/config-typescript/
+COPY packages/eslint-config/package.json ./packages/eslint-config/
+COPY packages/typescript-config/package.json ./packages/typescript-config/
+COPY apps/web/package.json ./apps/web/
+# (We don't need apps/admin here)
 
-# Install dependencies
-RUN npm install --legacy-peer-deps
+RUN pnpm install --frozen-lockfile
 
-# Copy full source
-COPY . .
+# Copy source code
+COPY packages ./packages
+COPY apps/web ./apps/web
 
-# Declare build-time env vars (Railway passes these from service Variables)
-ARG VITE_API_BASE_URL
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
-ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+# Build the web app
+RUN pnpm --filter web build
 
-# Build only the web app and its dependencies
-RUN npx turbo build --filter=web
+# Use a lightweight static server
+FROM node:20-alpine AS runner
+WORKDIR /app
 
-WORKDIR /app/apps/web
+# Install simple http server
+RUN npm install -g serve
 
-EXPOSE 4173
+# Copy built assets from builder
+COPY --from=builder /app/apps/web/dist ./dist
 
-CMD sh -c "npx vite preview --host 0.0.0.0 --port ${PORT:-4173}"
+# Expose port (defaulting to 3000, but railway will map it via $PORT)
+ENV PORT=3000
+EXPOSE 3000
+
+# Start server on 3000
+CMD serve -s dist -l $PORT
