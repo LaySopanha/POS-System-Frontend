@@ -98,3 +98,31 @@ export function useSchedule(serviceTypeId?: string | null) {
         staleTime: 60 * 1000, // 1 minute (schedule changes more often)
     });
 }
+
+// ─── Public Business Settings ──────────────────────────────────────────────
+
+export interface PublicBusinessSettings {
+    cafe_name: string | null;
+    cafe_tagline: string | null;
+    email: string | null;
+    phone: string | null;
+    website: string | null;
+    address_line1: string | null;
+    address_line2: string | null;
+    studio_hours: { day: string; hours: string }[] | null;
+}
+
+/**
+ * Fetch public business info for the Contact page (no auth required).
+ */
+export function usePublicSettings() {
+    return useQuery({
+        queryKey: ["settings", "public"],
+        queryFn: () =>
+            fetchJson<{ data: PublicBusinessSettings }>("/settings/public").then(
+                (r) => r.data
+            ),
+        staleTime: 10 * 60 * 1000, // 10 minutes — settings change rarely
+    });
+}
+

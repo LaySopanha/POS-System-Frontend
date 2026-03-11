@@ -1,5 +1,5 @@
-﻿import { useState, useEffect, useRef } from "react";
-import { Store, DollarSign, Receipt, Wifi, MapPin, Phone, Loader2, Save, ImagePlus, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Store, DollarSign, Receipt, Wifi, MapPin, Phone, Loader2, Save, ImagePlus, X, Clock, Plus } from "lucide-react";
 import { Button } from "@repo/ui";
 import { Input } from "@repo/ui";
 import { Label } from "@repo/ui";
@@ -30,6 +30,7 @@ const SettingsPage = () => {
   const [logoUrl, setLogoUrl]               = useState("");
   const [taxRate, setTaxRate]               = useState("10");
   const [currency, setCurrency]             = useState("USD");
+  const [studioHours, setStudioHours]       = useState<{ day: string; hours: string }[]>([]);
   const [logoUploading, setLogoUploading]   = useState(false);
   const [logoPreview, setLogoPreview]       = useState<string>("");
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -51,6 +52,11 @@ const SettingsPage = () => {
     setLogoPreview(settings.logo_url ?? "");
     setTaxRate(String(settings.tax_rate ?? 10));
     setCurrency(settings.currency ?? "USD");
+    setStudioHours(settings.studio_hours ?? [
+      { day: "Mon – Fri", hours: "6:00 AM – 9:00 PM" },
+      { day: "Saturday", hours: "7:00 AM – 6:00 PM" },
+      { day: "Sunday", hours: "8:00 AM – 4:00 PM" },
+    ]);
   }, [settings]);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,6 +97,7 @@ const SettingsPage = () => {
         logo_url:       logoUrl || null,
         tax_rate:       parseFloat(taxRate) || 10,
         currency,
+        studio_hours:   studioHours,
       });
       toast.success("Settings saved");
     } catch {
@@ -190,6 +197,48 @@ const SettingsPage = () => {
               <Label className="text-xs text-muted-foreground">Receipt Footer Message</Label>
               <Input value={receiptFooter} onChange={e => setReceiptFooter(e.target.value)} className="h-9 text-sm" placeholder="Thank you for your visit!" />
               <p className="text-[10px] text-muted-foreground">Shown as *** message *** at the bottom of the receipt.</p>
+            </div>
+
+            {/* Studio Hours */}
+            <div className="space-y-2 pt-1 border-t border-border">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Clock className="h-3 w-3" /> Studio Hours
+                </Label>
+                <button
+                  type="button"
+                  onClick={() => setStudioHours(h => [...h, { day: "", hours: "" }])}
+                  className="flex items-center gap-1 text-[10px] text-primary hover:underline"
+                >
+                  <Plus className="h-3 w-3" /> Add row
+                </button>
+              </div>
+              <div className="space-y-2">
+                {studioHours.map((row, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <Input
+                      value={row.day}
+                      onChange={e => setStudioHours(h => h.map((r, j) => j === i ? { ...r, day: e.target.value } : r))}
+                      className="h-8 text-xs flex-1"
+                      placeholder="e.g. Mon – Fri"
+                    />
+                    <Input
+                      value={row.hours}
+                      onChange={e => setStudioHours(h => h.map((r, j) => j === i ? { ...r, hours: e.target.value } : r))}
+                      className="h-8 text-xs flex-1"
+                      placeholder="e.g. 6:00 AM – 9:00 PM"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setStudioHours(h => h.filter((_, j) => j !== i))}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground">Shown on the customer Contact page.</p>
             </div>
 
             {/* Logo Upload */}

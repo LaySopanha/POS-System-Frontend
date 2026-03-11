@@ -70,6 +70,7 @@ const ZenHome = () => {
     classPackages,
     membershipPlans,
     pendingConfirmEmail,
+    loyaltyData,
     t
   } = useZenPortal();
 
@@ -185,6 +186,7 @@ const ZenHome = () => {
             handleCompleteBooking={handleCompleteBooking}
             sessionsRemaining={sessionsRemaining}
             allowedClassTypes={allowedClassTypes}
+            loyaltyData={loyaltyData}
           />
         )}
 

@@ -8,11 +8,14 @@ import type { ApiScheduleSlot } from "./use-wellness-api";
 import {
     useMyPackages,
     useMyBookings,
+    useMyLoyalty,
+    useMyLoyaltyHistory,
+    useMyPayments,
     usePurchasePackage,
     useBookClass,
     useCancelBooking,
 } from "./use-customer-api";
-import type { UserPackage, WellnessBooking } from "./use-customer-api";
+import type { UserPackage, WellnessBooking, ApiPaymentRecord } from "./use-customer-api";
 import {
     useClassPackages,
     useMembershipPlans,
@@ -62,6 +65,9 @@ export const useZenPortal = () => {
     // Customer endpoints (auth needed)
     const { data: apiPackages } = useMyPackages(isAuthenticated);
     const { data: apiBookings } = useMyBookings(isAuthenticated);
+    const { data: loyaltyData } = useMyLoyalty(isAuthenticated);
+    const { data: loyaltyHistory } = useMyLoyaltyHistory(isAuthenticated);
+    const { data: apiPayments } = useMyPayments(isAuthenticated);
 
     // Mutations
     const purchaseMutation = usePurchasePackage();
@@ -184,18 +190,18 @@ export const useZenPortal = () => {
         }));
     }, [apiBookings]);
 
-    // Payments: derive from purchased packages for now
+    // Payments: from new /customer/payments endpoint
     const payments: PaymentRecord[] = useMemo(() => {
-        if (!apiPackages) return [];
-        return apiPackages.map((up: UserPackage) => ({
-            id: up.id,
-            amount: parseFloat(up.package?.price || "0"),
-            date: up.purchase_date?.split("T")[0] || "",
-            method: "ABA Pay",
-            status: up.payment_status === "confirmed" ? "paid" as const : "pending" as const,
-            items: [up.package?.name || "Package"],
+        if (!apiPayments) return [];
+        return apiPayments.map((p: ApiPaymentRecord) => ({
+            id: p.id,
+            amount: parseFloat(p.amount),
+            date: p.created_at?.split("T")[0] || "",
+            method: p.payment_method === 'aba_payway' ? 'ABA PayWay' : p.payment_method,
+            status: p.payment_status as "paid" | "pending",
+            items: [`${p.module === 'wellness' ? 'Wellness Class/Package' : 'Cafe Order'} #${p.reference_id?.slice(-6) || ''}`],
         }));
-    }, [apiPackages]);
+    }, [apiPayments]);
 
     // ─── Schedule / Available Times ──────────────────────────────────────────
 
@@ -545,6 +551,8 @@ export const useZenPortal = () => {
         allowedClassTypes,
         pendingConfirmEmail,
         setPendingConfirmEmail,
+        loyaltyData,
+        loyaltyHistory,
         t
     };
 };

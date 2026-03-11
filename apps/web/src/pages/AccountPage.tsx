@@ -5,11 +5,14 @@ import {
     LayoutDashboard, TrendingUp, CreditCard,
     ChevronRight, Calendar, Clock, MapPin, CheckCircle2,
     AlertCircle, Trophy, Star, ShieldCheck,
-    Globe, FileText
+    Globe, FileText, Edit3, Save, X
 } from "lucide-react";
 import { cn } from "@repo/ui";
+import { toast } from "@repo/ui";
 import { classTypes } from "@repo/store";
 import { AccountTab, PurchasedPackage, BookedClass, PaymentRecord } from "@/types/zen-portal.ts";
+import type { LoyaltyInfo } from "@/hooks/use-customer-api";
+import { useUpdateProfile } from "@/hooks/use-customer-api";
 
 interface AccountPageProps {
     customer: any;
@@ -33,6 +36,7 @@ interface AccountPageProps {
     handleCompleteBooking: () => void;
     sessionsRemaining: number;
     allowedClassTypes: string[];
+    loyaltyData?: LoyaltyInfo;
 }
 
 const AccountPage: React.FC<AccountPageProps> = ({
@@ -56,9 +60,26 @@ const AccountPage: React.FC<AccountPageProps> = ({
     handleCompleteBooking,
     sessionsRemaining: totalSessionsRemaining,
     allowedClassTypes,
+    loyaltyData,
 }) => {
     const { t, i18n } = useTranslation();
     const [expandedBookingId, setExpandedBookingId] = React.useState<string | null>(null);
+    // Profile editing state
+    const [isEditingProfile, setIsEditingProfile] = React.useState(false);
+    const [profileForm, setProfileForm] = React.useState<{
+        first_name: string;
+        last_name: string;
+        phone: string;
+        preferred_contact: 'email' | 'telegram' | 'instagram';
+    }>({
+        first_name: customer.name?.split(' ')[0] || '',
+        last_name: customer.name?.split(' ').slice(1).join(' ') || '',
+        phone: customer.phone || '',
+        preferred_contact: (['email', 'telegram', 'instagram'].includes(customer.contactMethod)
+            ? customer.contactMethod
+            : 'email') as 'email' | 'telegram' | 'instagram',
+    });
+    const updateProfile = useUpdateProfile();
 
     const activePkgs = purchasedPackages.filter(p => (p.status === "active" || p.status === "inactive") && p.sessionsUsed < p.sessions);
     const pastPkgs = purchasedPackages.filter(p => p.status === "expired" || p.sessionsUsed >= p.sessions);
@@ -700,11 +721,26 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                 <p className="text-xs text-muted-foreground">{t('keep_moving_desc')}</p>
                             </div>
 
+                            {/* Loyalty Points Card */}
+                            {loyaltyData && (
+                                <div className="rounded-2xl bg-primary/5 border border-primary/10 p-5 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[9px] font-black text-primary uppercase tracking-widest">{loyaltyData.tier?.name || 'Member'} · {Math.round(loyaltyData.tier?.discount_percentage ?? 0)}% discount</p>
+                                        <p className="text-3xl font-black text-foreground mt-1">{loyaltyData.points_balance.toLocaleString()}</p>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">points available</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <Trophy className="text-primary/50 ml-auto" size={36} />
+                                        <p className="text-[9px] font-bold text-muted-foreground mt-1 uppercase tracking-widest">{loyaltyData.total_points_earned.toLocaleString()} earned total</p>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-3 gap-2">
                                 {[
                                     { label: t('total_hours'), value: (totalClasses * 50 / 60).toFixed(1), icon: Clock },
-                                    { label: t('streak'), value: "3", icon: TrendingUp },
-                                    { label: t('ranking'), value: "Top 12%", icon: Trophy },
+                                    { label: 'Loyalty Points', value: loyaltyData?.points_balance?.toLocaleString() ?? '—', icon: TrendingUp },
+                                    { label: 'Tier', value: loyaltyData?.tier?.name ?? '—', icon: Trophy },
                                 ].map((stat, i) => (
                                     <div key={i} className="bg-muted/30 rounded-2xl p-4 text-center space-y-1">
                                         <stat.icon className="mx-auto text-primary/70 mb-1" size={16} />
@@ -856,35 +892,101 @@ const AccountPage: React.FC<AccountPageProps> = ({
                     accountTab === "profile" && (
                         <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-400">
                             <div className="bg-card border border-border rounded-[2.5rem] p-8 shadow-sm space-y-8">
-                                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-2">{t('personal_details')}</h3>
-                                <div className="space-y-4">
-                                    {[
-                                        { label: t('full_name'), value: customer.name, icon: User },
-                                        { label: t('email_address'), value: customer.email, icon: History },
-                                        { label: t('phone_number'), value: customer.phone, icon: Clock },
-                                        { label: t('communication'), value: customer.contactMethod, icon: CheckCircle2 },
-                                    ].map((field, i) => (
-                                        <div key={i} className="flex items-center gap-4 bg-muted/20 rounded-2xl p-4 border border-transparent hover:border-border transition-colors group cursor-pointer">
-                                            <div className="h-10 w-10 bg-card border border-border rounded-xl flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
-                                                <field.icon size={18} />
-                                            </div>
-                                            <div className="flex-1 text-left">
-                                                <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{field.label}</p>
-                                                <p className="text-sm font-bold text-foreground capitalize">{field.value}</p>
-                                            </div>
-                                            <ChevronRight size={16} className="text-muted-foreground opacity-30" />
-                                        </div>
-                                    ))}
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-2">{t('personal_details')}</h3>
+                                    {!isEditingProfile && (
+                                        <button
+                                            onClick={() => setIsEditingProfile(true)}
+                                            className="flex items-center gap-1.5 text-[9px] font-black text-primary uppercase tracking-widest border border-primary/20 px-3 py-1.5 rounded-xl hover:bg-primary/5 transition-colors"
+                                        >
+                                            <Edit3 size={11} /> Edit
+                                        </button>
+                                    )}
                                 </div>
 
-                                <div className="pt-4 flex flex-col gap-3">
-                                    <button className="w-full bg-primary py-4 rounded-2xl text-[11px] font-black text-primary-foreground uppercase tracking-[0.2em] shadow-lg shadow-primary/20">
-                                        {t('update_profile_btn')}
-                                    </button>
-                                    <button className="w-full bg-muted/40 py-3 rounded-2xl text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                                        {t('reset_password')}
-                                    </button>
-                                </div>
+                                {isEditingProfile ? (
+                                    <div className="space-y-4">
+                                        {[
+                                            { label: 'First Name', key: 'first_name' as const, type: 'text' },
+                                            { label: 'Last Name', key: 'last_name' as const, type: 'text' },
+                                            { label: t('phone_number'), key: 'phone' as const, type: 'tel' },
+                                        ].map((field) => (
+                                            <div key={field.key} className="space-y-1">
+                                                <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest px-1">{field.label}</p>
+                                                <input
+                                                    type={field.type}
+                                                    value={profileForm[field.key]}
+                                                    onChange={(e) => setProfileForm(f => ({ ...f, [field.key]: e.target.value }))}
+                                                    className="w-full rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm font-bold text-foreground focus:outline-none focus:border-primary focus:ring-0 transition-colors"
+                                                />
+                                            </div>
+                                        ))}
+                                        {/* Preferred Contact */}
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest px-1">{t('communication')}</p>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {(['email', 'telegram', 'instagram'] as const).map((method) => (
+                                                    <button
+                                                        key={method}
+                                                        onClick={() => setProfileForm(f => ({ ...f, preferred_contact: method }))}
+                                                        className={cn(
+                                                            "py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all",
+                                                            profileForm.preferred_contact === method
+                                                                ? "bg-primary text-primary-foreground border-primary"
+                                                                : "bg-muted/20 border-border text-muted-foreground hover:bg-muted/40"
+                                                        )}
+                                                    >
+                                                        {method}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 pt-2">
+                                            <button
+                                                onClick={() => setIsEditingProfile(false)}
+                                                className="flex items-center justify-center gap-2 py-3 rounded-2xl border border-border text-[10px] font-black text-muted-foreground uppercase tracking-widest hover:bg-muted/40 transition-colors"
+                                            >
+                                                <X size={13} /> Cancel
+                                            </button>
+                                            <button
+                                                disabled={updateProfile.isPending}
+                                                onClick={() => {
+                                                    updateProfile.mutate(profileForm, {
+                                                        onSuccess: () => {
+                                                            toast.success('Profile updated!');
+                                                            setIsEditingProfile(false);
+                                                        },
+                                                        onError: (err: any) => {
+                                                            toast.error(err?.body?.message || 'Update failed');
+                                                        },
+                                                    });
+                                                }}
+                                                className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest shadow-md disabled:opacity-60 transition-opacity"
+                                            >
+                                                <Save size={13} /> {updateProfile.isPending ? 'Saving…' : 'Save'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {[
+                                            { label: t('full_name'), value: customer.name, icon: User },
+                                            { label: t('email_address'), value: customer.email, icon: History },
+                                            { label: t('phone_number'), value: customer.phone || '—', icon: Clock },
+                                            { label: t('communication'), value: customer.contactMethod, icon: CheckCircle2 },
+                                        ].map((field, i) => (
+                                            <div key={i} className="flex items-center gap-4 bg-muted/20 rounded-2xl p-4 border border-transparent">
+                                                <div className="h-10 w-10 bg-card border border-border rounded-xl flex items-center justify-center text-muted-foreground">
+                                                    <field.icon size={18} />
+                                                </div>
+                                                <div className="flex-1 text-left">
+                                                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{field.label}</p>
+                                                    <p className="text-sm font-bold text-foreground capitalize">{field.value}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Language Switcher Section */}

@@ -209,3 +209,83 @@ export function useRescheduleBooking() {
         },
     });
 }
+
+// ─── Loyalty History ──────────────────────────────────────────────────────────
+
+export interface LoyaltyTransaction {
+    id: string;
+    points: number;
+    type: "earn" | "redeem" | "adjust" | "expire";
+    description: string;
+    created_at: string;
+    rule?: { name: string } | null;
+}
+
+/**
+ * Fetch the customer's point transaction history (paginated, 20 per page).
+ */
+export function useMyLoyaltyHistory(enabled = true) {
+    return useQuery({
+        queryKey: ["customer", "loyalty", "history"],
+        queryFn: () =>
+            api
+                .get<{ data: LoyaltyTransaction[]; total: number }>("/customer/loyalty/history")
+                .then((r) => r.data),
+        enabled,
+        staleTime: 60 * 1000,
+    });
+}
+
+// ─── Profile Update ───────────────────────────────────────────────────────────
+
+export interface UpdateProfilePayload {
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+    telegram_handle?: string;
+    instagram_handle?: string;
+    preferred_contact?: string;
+}
+
+/**
+ * Update the authenticated customer's profile via PUT /auth/me.
+ */
+export function useUpdateProfile() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (payload: UpdateProfilePayload) =>
+            api.put<{ message: string; data: UpdateProfilePayload }>("/auth/me", payload),
+        onSuccess: () => {
+            // Invalidate profile so useAuth refetches the latest data
+            queryClient.invalidateQueries({ queryKey: ["auth", "profile"] });
+        },
+    });
+}
+
+// ─── Payment History ──────────────────────────────────────────────────────────
+
+export interface ApiPaymentRecord {
+    id: string;
+    reference_id: string;
+    module: string;
+    amount: string; // decimal from db
+    payment_method: string;
+    payment_status: string;
+    created_at: string;
+}
+
+/**
+ * Fetch the customer's payment history (paginated, 20 per page).
+ */
+export function useMyPayments(enabled = true) {
+    return useQuery({
+        queryKey: ["customer", "payments"],
+        queryFn: () =>
+            api
+                .get<{ data: ApiPaymentRecord[]; total: number }>("/customer/payments")
+                .then((r) => r.data),
+        enabled,
+        staleTime: 60 * 1000,
+    });
+}

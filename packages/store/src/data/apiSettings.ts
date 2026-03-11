@@ -19,6 +19,7 @@ export interface BusinessSettings {
     currency: string;
     tax_rate: number;
     tax_inclusive: boolean;
+    studio_hours: { day: string; hours: string }[] | null;
     created_at: string;
     updated_at: string;
 }
