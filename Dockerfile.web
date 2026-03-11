@@ -3,11 +3,11 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Enable corepack for pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Enable corepack for npm/yarn/pnpm (just in case, though we use npm)
+RUN corepack enable
 
 # Copy workspace config and install dependencies
-COPY pnpm-lock.yaml package.json pnpm-workspace.yaml turbo.json ./
+COPY package-lock.json package.json turbo.json ./
 COPY packages/store/package.json ./packages/store/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/config-tailwind/package.json ./packages/config-tailwind/
@@ -15,14 +15,14 @@ COPY packages/config-typescript/package.json ./packages/config-typescript/
 COPY apps/web/package.json ./apps/web/
 # (We don't need apps/admin here)
 
-RUN pnpm install --frozen-lockfile
+RUN npm install
 
 # Copy source code
 COPY packages ./packages
 COPY apps/web ./apps/web
 
 # Build the web app
-RUN pnpm --filter web build
+RUN npm run build --workspace=web
 
 # Use a lightweight static server
 FROM node:20-alpine AS runner
