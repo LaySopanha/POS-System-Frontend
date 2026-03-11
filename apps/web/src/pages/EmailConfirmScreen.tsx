@@ -30,7 +30,11 @@ const EmailConfirmScreen: React.FC<EmailConfirmScreenProps> = ({ email, onBack, 
     const handleResend = async () => {
         if (resendCooldown > 0) return;
         setResending(true);
-        await supabase.auth.resend({ type: "signup", email });
+        await supabase.auth.resend({
+            type: "signup",
+            email,
+            options: { emailRedirectTo: window.location.origin }
+        });
         setResending(false);
         setResendCooldown(60);
     };
