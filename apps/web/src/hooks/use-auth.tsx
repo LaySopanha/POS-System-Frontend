@@ -139,6 +139,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     password,
                     options: {
                         data: metadata,
+                        emailRedirectTo: window.location.origin,
                     },
                 });
 
