@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "@repo/ui";
 import { useAuth } from "./use-auth";
-import { useServiceTypes, useSchedule } from "./use-wellness-api";
-import type { ApiScheduleSlot } from "./use-wellness-api";
+import { useServiceTypes, useSchedule, useServicePackages } from "./use-wellness-api";
+import type { ApiScheduleSlot, ApiPackage } from "./use-wellness-api";
 import {
     useMyPackages,
     useMyBookings,
@@ -62,6 +62,7 @@ export const useZenPortal = () => {
     // Public endpoints (no auth needed) — service types and schedule
     const { data: apiServiceTypes } = useServiceTypes();
     const { data: apiScheduleSlots } = useSchedule();
+    const { data: apiPackagesAll } = useServicePackages("all"); // Fetch all active packages
 
     // Customer endpoints (auth needed)
     const { data: apiPackages } = useMyPackages(isAuthenticated);
@@ -77,6 +78,7 @@ export const useZenPortal = () => {
     const cancelBookingMutation = useCancelBooking();
 
     // Fallback to in-memory store data for class packages (used for pricing display)
+    // Hardcoded store arrays (fallback)
     const storeClassPackages = useClassPackages();
     const storeMembershipPlans = useMembershipPlans();
 
@@ -152,12 +154,32 @@ export const useZenPortal = () => {
 
     // Purchased packages: from backend API when authenticated, empty otherwise
     const purchasedPackages: PurchasedPackage[] = useMemo(() => {
-        if (!apiPackages) return [];
-        return apiPackages.map((up: UserPackage) => ({
-            id: up.id,
-            packageName: up.package?.name || "Package",
-            classTypeId: up.package?.service_type?.id,
-            price: parseFloat(up.package?.price || "0"),
+        if (!apiPackages || !apiServiceTypes) return [];
+        return apiPackages.map((up: UserPackage) => {
+            const stName = up.package?.service_type?.name?.toLowerCase() || "";
+            let classTypeId: string | undefined = up.package?.service_type?.id;
+
+            if (up.package?.package_type === "membership") {
+                classTypeId = "membership";
+            } else if (stName.includes("reformer")) {
+                classTypeId = "reformer";
+            } else if (stName.includes("cadillac")) {
+                classTypeId = "cadillac";
+            } else if (stName.includes("hot")) {
+                classTypeId = "hot-pilates";
+            } else if (stName.includes("barre")) {
+                classTypeId = "barre";
+            } else if (stName.includes("recovery")) {
+                classTypeId = "recovery-lounge";
+            } else if (up.package?.service_type?.name) {
+                classTypeId = up.package.service_type.name; // Use raw name as fallback instead of UUID
+            }
+
+            return {
+                id: up.id,
+                packageName: up.package?.name || "Package",
+                classTypeId,
+                price: parseFloat(up.package?.price || "0"),
             sessions: up.package?.sessions_included || 0,
             sessionsUsed: up.package?.sessions_included
                 ? (up.package.sessions_included - (up.sessions_remaining ?? 0))
@@ -166,14 +188,66 @@ export const useZenPortal = () => {
             remarks: up.package?.description || "",
             benefits: [],
             purchasedAt: up.purchase_date,
+            startedAt: up.start_date ?? null,
             expiresAt: up.expiry_date,
             status: up.payment_status === "confirmed" && up.status === "active"
-                ? "active" as const
+                ? (up.start_date ? "active" as const : "not_started" as const)
                 : up.payment_status === "pending"
                     ? "inactive" as const
                     : "expired" as const,
-        }));
-    }, [apiPackages]);
+            };
+        });
+    }, [apiPackages, apiServiceTypes]);
+
+    // Available Packages: from backend API (public), mapped to UI types
+    const classPackages: ClassPackage[] = useMemo(() => {
+        if (!apiPackagesAll || !apiServiceTypes) return storeClassPackages;
+        
+        return apiPackagesAll
+            .filter((p: ApiPackage) => p.package_type === "class_pack")
+            .map((p: ApiPackage) => {
+                // Map backend UUID back to "reformer", "cadillac" frontend IDs based on name
+                const st = apiServiceTypes.find(t => t.id === p.service_type_id);
+                const stName = st?.name.toLowerCase() || "";
+                let classTypeId = "reformer";
+                if (stName.includes("cadillac")) classTypeId = "cadillac";
+                if (stName.includes("hot")) classTypeId = "hot-pilates";
+                if (stName.includes("barre")) classTypeId = "barre";
+                if (stName.includes("recovery")) classTypeId = "recovery-lounge";
+
+                return {
+                    id: p.id,
+                    classTypeId,
+                    name: p.name,
+                    sessions: p.sessions_included || 999,
+                    pricePerSession: (p.sessions_included || 1) > 0 ? parseFloat(p.price) / (p.sessions_included || 1) : 0,
+                    price: parseFloat(p.price),
+                    validity: `${p.validity_days} days`,
+                    duration: "50 mins",
+                    remarks: p.remarks || p.description || "",
+                    benefits: p.benefits || [], // Passed through from ApiPackage
+                    isIntro: p.name.toLowerCase().includes("intro"),
+                    isActive: true
+                };
+            });
+    }, [apiPackagesAll, storeClassPackages, apiServiceTypes]);
+
+    const membershipPlans: MembershipPlan[] = useMemo(() => {
+        if (!apiPackagesAll) return storeMembershipPlans;
+
+        return apiPackagesAll
+            .filter((p: ApiPackage) => p.package_type === "membership")
+            .map((p: ApiPackage) => ({
+                id: p.id,
+                name: p.name,
+                tagline: "Monthly Plan", // Can be customized later
+                price: parseFloat(p.price),
+                validity: `${p.validity_days} days`,
+                duration: "50 mins",
+                includes: p.benefits || [], // Mapped to includes for MembershipPlan compatibility
+                description: p.description || p.remarks || ""
+            }));
+    }, [apiPackagesAll, storeMembershipPlans]);
 
     // Booked classes: from backend API when authenticated, empty otherwise
     const bookedClasses: BookedClass[] = useMemo(() => {
@@ -237,7 +311,7 @@ export const useZenPortal = () => {
     // ─── Derived Memos ───────────────────────────────────────────────────────
 
     const activePackages = useMemo(
-        () => purchasedPackages.filter((p) => p.status === "active" && p.sessionsUsed < p.sessions),
+        () => purchasedPackages.filter((p) => (p.status === "active" || p.status === "not_started") && p.sessionsUsed < p.sessions),
         [purchasedPackages]
     );
 
@@ -382,11 +456,13 @@ export const useZenPortal = () => {
 
     const handleSelectPackage = (pkg: ClassPackage) => {
         setSelectedPackage(pkg);
+        setSelectedMembership(null);
         navigate(`/packages/${pkg.id}`);
     };
 
     const handleSelectMembership = (plan: MembershipPlan) => {
         setSelectedMembership(plan);
+        setSelectedPackage(null);
         navigate(`/packages/${plan.id}`);
     };
 
@@ -548,8 +624,8 @@ export const useZenPortal = () => {
         goBack,
         requireAuth,
         navigate,
-        classPackages: storeClassPackages,
-        membershipPlans: storeMembershipPlans,
+        classPackages,
+        membershipPlans,
         allowedClassTypes,
         pendingConfirmEmail,
         setPendingConfirmEmail,

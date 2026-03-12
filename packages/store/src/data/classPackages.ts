@@ -28,6 +28,7 @@ export interface ClassPackage {
   validity: string;
   remarks: string;
   duration: string;
+  benefits?: string[];
   isIntro?: boolean;
   isActive?: boolean;
 }

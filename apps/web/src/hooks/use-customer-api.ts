@@ -8,6 +8,7 @@ export interface UserPackage {
     user_id: string;
     package_id: string;
     purchase_date: string;
+    start_date: string | null;   // null = not yet activated (no booking made)
     expiry_date: string;
     sessions_remaining: number | null;
     status: string;
@@ -20,6 +21,7 @@ export interface UserPackage {
         price: string;
         validity_days: number;
         description: string | null;
+        service_type_id?: string;
         service_type: {
             id: string;
             name: string;

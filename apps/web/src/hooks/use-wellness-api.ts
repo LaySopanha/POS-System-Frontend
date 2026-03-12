@@ -23,6 +23,9 @@ export interface ApiPackage {
     is_refundable: boolean;
     is_shareable: boolean;
     is_transferable: boolean;
+    service_type_id?: string;
+    remarks?: string | null;
+    benefits?: string[];
 }
 
 export interface ApiScheduleSlot {

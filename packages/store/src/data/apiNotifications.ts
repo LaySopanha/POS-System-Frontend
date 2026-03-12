@@ -3,7 +3,7 @@ import { api } from "../api";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type AdminNotificationType = "order" | "system";
+export type AdminNotificationType = "order" | "system" | "package_purchase";
 
 export interface AdminNotification {
     id: string;

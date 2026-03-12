@@ -54,32 +54,31 @@ const PackageDetailPage: React.FC<PackageDetailViewProps> = ({
                                 ))
                             ) : (
                                 <>
-                                    <li className="flex gap-3 text-sm text-muted-foreground leading-snug">
-                                        <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                                        <span>
-                                            {(item as ClassPackage).sessions === 999 ? t('unlimited') : (item as ClassPackage).sessions} {t('sessions')} {t('at_studio')}. {t('valid_for')} {(item as ClassPackage).validity}.
-                                        </span>
-                                    </li>
-                                    {(item as ClassPackage).remarks && (
+                                    {/* Render dynamic benefits from DB if available */}
+                                    {(item as ClassPackage).benefits && (item as ClassPackage).benefits!.length > 0 ? (
+                                        (item as ClassPackage).benefits!.map((benefit, i) => (
+                                            <li key={`benefit-${i}`} className="flex gap-3 text-sm text-muted-foreground leading-snug">
+                                                <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                                                <span>{benefit}</span>
+                                            </li>
+                                        ))
+                                    ) : (
+                                        /* Fallback to static text if no benefits array */
                                         <li className="flex gap-3 text-sm text-muted-foreground leading-snug">
                                             <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                                            <span>{(item as ClassPackage).remarks}</span>
+                                            <span>
+                                                {(item as ClassPackage).sessions === 999 ? t('unlimited') : (item as ClassPackage).sessions} {t('sessions')} {t('at_studio')}. {t('valid_for')} {(item as ClassPackage).validity}.
+                                            </span>
                                         </li>
                                     )}
                                 </>
                             )}
-                            <li className="flex gap-3 text-sm text-muted-foreground leading-snug">
-                                <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                                {t('access_facilities')}
-                            </li>
                         </ul>
                     </div>
 
                     <div className="space-y-2 px-2">
                         <p className="text-[10px] text-muted-foreground leading-relaxed italic opacity-80">
-                            * {isMembership
-                                ? t('auto_renewal_msg')
-                                : t('non_transferable_msg')}
+                            * {(item as any).remarks || (item as any).description || (isMembership ? t('auto_renewal_msg') : t('non_transferable_msg'))}
                         </p>
                     </div>
 

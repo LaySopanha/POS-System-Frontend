@@ -30,9 +30,10 @@ export interface PurchasedPackage {
     remarks: string;
     benefits?: string[];
     purchasedAt: string;
-    activatedAt?: string; // Activated on first booking
-    expiresAt?: string;
-    status: "active" | "inactive" | "expired";
+    startedAt?: string | null;  // Set on first booking (package activation date)
+    activatedAt?: string;       // Timestamp when activated
+    expiresAt?: string;         // Computed: startedAt + validity_days
+    status: "active" | "not_started" | "inactive" | "expired";
 }
 
 export interface BookedClass {

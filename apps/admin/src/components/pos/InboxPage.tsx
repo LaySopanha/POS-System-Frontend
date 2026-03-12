@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Inbox, ShoppingBag, Info, CheckCircle2, Circle, Trash2, Search, RefreshCw } from "lucide-react";
+import { Inbox, ShoppingBag, Info, CheckCircle2, Circle, Trash2, Search, RefreshCw, Package } from "lucide-react";
 import {
   useAdminNotifications,
   useMarkAdminNotificationRead,
@@ -14,16 +14,19 @@ import { Input } from "@repo/ui";
 const typeIcon: Record<AdminNotificationType, typeof Inbox> = {
   order: ShoppingBag,
   system: Info,
+  package_purchase: Package,
 };
 
 const typeColor: Record<AdminNotificationType, string> = {
   order: "bg-amber-100 text-amber-700",
   system: "bg-muted text-muted-foreground",
+  package_purchase: "bg-primary/20 text-primary",
 };
 
 const typeLabel: Record<AdminNotificationType, string> = {
   order: "Order",
   system: "System",
+  package_purchase: "Purchase",
 };
 
 const InboxPage = () => {
@@ -95,7 +98,7 @@ const InboxPage = () => {
           <Input placeholder="Search inbox..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <div className="flex gap-1.5">
-          {(["all", "order", "system"] as const).map((t) => (
+          {(["all", "order", "system", "package_purchase"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setFilter(t)}

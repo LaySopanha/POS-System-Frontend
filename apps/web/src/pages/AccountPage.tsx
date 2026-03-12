@@ -83,7 +83,9 @@ const AccountPage: React.FC<AccountPageProps> = ({
     });
     const updateProfile = useUpdateProfile();
 
-    const activePkgs = purchasedPackages.filter(p => (p.status === "active" || p.status === "inactive") && p.sessionsUsed < p.sessions);
+    const activePkgs = purchasedPackages.filter(p =>
+        (p.status === "active" || p.status === "inactive" || p.status === "not_started") && p.sessionsUsed < p.sessions
+    );
     const pastPkgs = purchasedPackages.filter(p => p.status === "expired" || p.sessionsUsed >= p.sessions);
     const now = new Date();
     const upcomingBookings = bookedClasses.filter(b => {
@@ -280,29 +282,64 @@ const AccountPage: React.FC<AccountPageProps> = ({
                         )}
 
                         {/* Active Membership Snippet */}
-                        <div className="bg-card border border-border rounded-[2rem] p-6 space-y-4">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                                <Star size={12} className="text-yellow-500 fill-yellow-500" /> {t('current_membership')}
-                            </h4>
-                            {activePkgs.length > 0 ? (
-                                <div className="flex justify-between items-center group">
-                                    <div>
-                                        <p className="text-lg font-bold text-foreground">{activePkgs[0].packageName}</p>
-                                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">
-                                            {t('expires')} {activePkgs[0].expiresAt?.split('T')[0] || t('not_activated')}
-                                        </p>
+                        {(() => {
+                            const membershipPkgs = activePkgs.filter(p => p.packageName.toLowerCase().includes("membership") || p.classTypeId === "membership");
+                            const classPkgs = activePkgs.filter(p => !p.packageName.toLowerCase().includes("membership") && p.classTypeId !== "membership");
+                            
+                            return (
+                                <>
+                                    <div className="bg-card border border-border rounded-[2rem] p-6 space-y-4 shadow-sm">
+                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                                            <Star size={12} className="text-yellow-500 fill-yellow-500" /> {t('current_membership')}
+                                        </h4>
+                                        {membershipPkgs.length > 0 ? (
+                                            <div className="flex justify-between items-center group">
+                                                <div>
+                                                    <p className="text-lg font-bold text-foreground">{membershipPkgs[0].packageName}</p>
+                                                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight mt-1">
+                                                        {t('expires')} {membershipPkgs[0].expiresAt?.split('T')[0] || t('not_activated')}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={() => setAccountTab("packages")}
+                                                    className="h-10 w-10 flex items-center justify-center rounded-xl bg-muted/30 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-all"
+                                                >
+                                                    <ChevronRight />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-muted-foreground italic">{t('no_active_packs')}</p>
+                                        )}
                                     </div>
-                                    <button
-                                        onClick={() => setAccountTab("packages")}
-                                        className="h-10 w-10 flex items-center justify-center rounded-xl bg-muted/30 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-all"
-                                    >
-                                        <ChevronRight />
-                                    </button>
-                                </div>
-                            ) : (
-                                <p className="text-xs text-muted-foreground italic">{t('no_active_packs')}</p>
-                            )}
-                        </div>
+
+                                    {/* Summary of other packages */}
+                                    {classPkgs.length > 0 && (
+                                        <div className="bg-card border border-border rounded-[2rem] p-6 space-y-4 shadow-sm">
+                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                                                <Package size={12} className="text-primary" /> Active Class Packages ({classPkgs.length})
+                                            </h4>
+                                            <div className="space-y-3">
+                                                {classPkgs.slice(0, 3).map(pkg => (
+                                                    <div key={pkg.id} className="flex justify-between items-center bg-muted/20 p-3 rounded-2xl border border-border/50">
+                                                        <div>
+                                                            <p className="text-xs font-bold text-foreground">{pkg.packageName}</p>
+                                                            <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-tight mt-0.5">
+                                                                {pkg.sessions - pkg.sessionsUsed} {t('sessions_remaining')}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                {classPkgs.length > 3 && (
+                                                    <button onClick={() => setAccountTab("packages")} className="text-[10px] w-full text-center text-primary font-bold uppercase tracking-widest mt-2">
+                                                        View all...
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
                     </div>
                 )}
 
@@ -312,7 +349,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
                         {/* Active Packages */}
                         <div className="space-y-4">
                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2 px-2">
-                                <CheckCircle2 size={14} className="text-green-500" /> {t('active_memberships')}
+                                <CheckCircle2 size={14} className="text-green-500" /> Active Packages & Memberships
                             </h3>
                             {activePkgs.map((pkg) => (
                                 <div key={pkg.id} className="relative group">
@@ -321,13 +358,18 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                         <div className="flex justify-between items-start mb-8">
                                             <div className="space-y-1">
                                                 <h3 className="text-2xl font-black text-foreground tracking-tight" style={{ fontFamily: "var(--font-accent)" }}>{pkg.packageName}</h3>
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 flex-wrap mt-2">
+                                                    {pkg.classTypeId && pkg.classTypeId !== "membership" && (
+                                                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-primary/10 text-primary uppercase tracking-widest">
+                                                            {pkg.classTypeId.replace('-', ' ')}
+                                                        </span>
+                                                    )}
                                                     <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-matcha/10 text-matcha uppercase tracking-widest">
                                                         {pkg.validity}
                                                     </span>
-                                                    {pkg.status === "inactive" && (
+                                                    {(pkg.status === "inactive" || pkg.status === "not_started") && (
                                                         <span className="text-[10px] font-black px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 uppercase tracking-widest animate-pulse">
-                                                            {t('not_activated_yet')}
+                                                            Not started yet
                                                         </span>
                                                     )}
                                                 </div>
@@ -341,11 +383,21 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                         <div className="grid grid-cols-2 gap-8 pt-6 border-t border-border/50">
                                             <div className="space-y-1">
                                                 <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em]">{t('start_date')}</p>
-                                                <p className="text-sm font-black text-foreground">{pkg.activatedAt?.split('T')[0] || t('activates_on_first_booking')}</p>
+                                                <p className="text-sm font-black text-foreground">
+                                                    {pkg.startedAt
+                                                        ? pkg.startedAt.split('T')[0]
+                                                        : <span className="text-primary/70 italic text-xs">Activates on first booking</span>
+                                                    }
+                                                </p>
                                             </div>
                                             <div className="space-y-1 text-right">
                                                 <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em]">{t('end_date')}</p>
-                                                <p className="text-sm font-black text-foreground">{pkg.expiresAt?.split('T')[0] || t('depends_on_activation')}</p>
+                                                <p className="text-sm font-black text-foreground">
+                                                    {pkg.expiresAt
+                                                        ? pkg.expiresAt.split('T')[0]
+                                                        : <span className="text-muted-foreground italic text-xs">Depends on activation</span>
+                                                    }
+                                                </p>
                                             </div>
                                         </div>
 
