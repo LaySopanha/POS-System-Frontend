@@ -1,6 +1,6 @@
 import React from "react";
-import { ChevronRight, Clock, Users, Check } from "lucide-react";
-import { cn, Calendar } from "@repo/ui";
+import { ChevronRight, Clock, Users, AlertCircle } from "lucide-react";
+import { cn, Calendar, Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter } from "@repo/ui";
 import { useTranslation } from "react-i18next";
 
 interface SelectTimeViewProps {
@@ -81,12 +81,6 @@ const SelectTimePage: React.FC<SelectTimeViewProps> = ({
                                         )}
                                     >
                                         <div className="flex items-center gap-4">
-                                            <div className={cn(
-                                                "flex h-5 w-5 items-center justify-center rounded-full border transition-all",
-                                                isSelected ? "bg-primary border-primary text-primary-foreground" : "border-border bg-background"
-                                            )}>
-                                                {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
-                                            </div>
                                             <div className="space-y-0.5">
                                                 <p className="text-sm font-bold text-foreground leading-none">
                                                     {slot.startTime} – {slot.endTime}
@@ -108,7 +102,7 @@ const SelectTimePage: React.FC<SelectTimeViewProps> = ({
                                                         <Users className="h-3 w-3" />
                                                         {slot.spotsLeft} spots
                                                     </span>
-                                                    <ChevronRight className="h-4 w-4 text-muted-foreground/30" />
+                                                    <ChevronRight className="h-4 w-4 text-primary" />
                                                 </div>
                                             )}
                                         </div>
@@ -123,25 +117,50 @@ const SelectTimePage: React.FC<SelectTimeViewProps> = ({
                                 <p className="text-sm font-medium text-muted-foreground">{t('no_sessions')}</p>
                             </div>
                         )}
-
-                        {selectedSlots.length > 0 && (
-                            <div className="pt-4 animate-in slide-in-from-bottom-4 duration-300">
-                                <button
-                                    onClick={handleCompleteBooking}
-                                    className="w-full flex items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-sm font-bold text-primary-foreground shadow-xl transition-all hover:bg-primary/90 hover:shadow-2xl active:scale-[0.98]"
-                                >
-                                    {t('done_booking')} ({selectedSlots.length}) →
-                                </button>
-                                {customer && sessionsRemaining > 0 && (
-                                    <p className="mt-3 text-center text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
-                                        {sessionsRemaining - selectedSlots.length} {t('sessions_remaining')}
-                                    </p>
-                                )}
-                            </div>
-                        )}
                     </div>
                 </section>
             )}
+
+            {/* One-Click Booking Drawer */}
+            <Drawer 
+                open={selectedSlots.length > 0} 
+                onOpenChange={(open: boolean) => {
+                    if (!open && selectedSlots.length > 0) {
+                        // Clear selection if user closes drawer
+                        handleSelectTime(selectedSlots[0]); 
+                    }
+                }}
+            >
+                <DrawerContent>
+                    <DrawerHeader className="text-left space-y-4 pt-4 pb-0">
+                        <DrawerTitle className="text-2xl font-bold font-serif text-foreground">Confirm your booking</DrawerTitle>
+                        <DrawerDescription className="text-muted-foreground text-sm flex items-start gap-3 bg-muted/30 p-4 rounded-2xl">
+                           <div className="h-10 w-10 flex items-center justify-center bg-background rounded-full shrink-0 border border-border">
+                             <Clock className="h-4 w-4 text-foreground" />
+                           </div>
+                           <div className="flex flex-col">
+                             <span className="font-bold text-foreground">{selectedSlots[0]?.name}</span>
+                             <span>{selectedDate?.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at {selectedSlots[0]?.startTime}</span>
+                             <span className="text-xs mt-1">with {selectedSlots[0]?.instructor?.name}</span>
+                           </div>
+                        </DrawerDescription>
+                    </DrawerHeader>
+                    <DrawerFooter className="pb-8 pt-4">
+                        <button
+                            onClick={handleCompleteBooking}
+                            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-sm font-bold text-primary-foreground shadow-xl transition-all hover:bg-primary/90 hover:scale-[1.01] active:scale-[0.98]"
+                        >
+                            Confirm & Book Session
+                        </button>
+                        {customer && sessionsRemaining > 0 && (
+                            <div className="mt-2 flex items-center justify-center gap-1.5 text-center text-[10px] font-bold text-zen-dark uppercase tracking-widest px-4 py-2 bg-matcha/10 rounded-xl mx-auto w-fit">
+                                <AlertCircle className="h-3 w-3 text-matcha" />
+                                {sessionsRemaining} {t('sessions_remaining')}
+                            </div>
+                        )}
+                    </DrawerFooter>
+                </DrawerContent>
+            </Drawer>
         </div>
     );
 };
