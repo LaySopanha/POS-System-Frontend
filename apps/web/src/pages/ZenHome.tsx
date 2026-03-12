@@ -1,5 +1,6 @@
 import { useZenPortal } from "@/hooks/use-zen-portal";
 import StepHeader from "@/components/ZenPortal/StepHeader";
+import { RefreshCw } from "lucide-react";
 
 // Page Components
 import HomePage from "@/pages/HomePage";
@@ -42,6 +43,7 @@ const ZenHome = () => {
     addToCart,
     removeFromCart,
     handleCheckoutCart,
+    isPurchaseLoading,
     purchasedPackages,
     bookedClasses,
     payments,
@@ -234,7 +236,12 @@ const ZenHome = () => {
                     <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('total_label')}</span>
                     <span className="text-2xl font-black text-foreground">$ {cart.reduce((s, i: any) => s + i.price, 0)}</span>
                   </div>
-                  <button onClick={handleCheckoutCart} className="w-full rounded-2xl bg-primary py-4 font-bold text-sm text-primary-foreground shadow-xl transition-all hover:bg-primary/90 active:scale-[0.98] uppercase tracking-wider">
+                  <button 
+                    onClick={handleCheckoutCart} 
+                    disabled={isPurchaseLoading}
+                    className="w-full flex justify-center items-center gap-2 rounded-2xl bg-primary py-4 font-bold text-sm text-primary-foreground shadow-xl transition-all hover:bg-primary/90 active:scale-[0.98] uppercase tracking-wider disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    {isPurchaseLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
                     {t('checkout')}
                   </button>
                 </div>

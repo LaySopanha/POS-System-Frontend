@@ -600,6 +600,7 @@ export const useZenPortal = () => {
         addToCart,
         removeFromCart,
         handleCheckoutCart,
+        isPurchaseLoading: purchaseMutation.isPending,
         purchasedPackages,
         bookedClasses,
         payments,
