@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@repo/ui";
 import { toast } from "@repo/ui";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui";
 import { classTypes } from "@repo/store";
 import { AccountTab, PurchasedPackage, BookedClass, PaymentRecord } from "@/types/zen-portal.ts";
 import type { LoyaltyInfo, CustomerStats } from "@/hooks/use-customer-api";
@@ -340,10 +341,10 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                     </div>
                                 </div>
                                 <button
-                                    onClick={() => navigate("/schedule")}
+                                    onClick={() => setAccountTab("classes")}
                                     className="w-full bg-card rounded-2xl py-3 text-xs font-black uppercase tracking-widest border border-border shadow-sm hover:translate-y-[-2px] transition-transform"
                                 >
-                                    {t('prepare_for_class')}
+                                    View Class
                                 </button>
                             </div>
                         ) : (
@@ -825,17 +826,18 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                             <h3 className="font-bold text-zen-dark text-sm">Deduct session from</h3>
                                             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">One package only</span>
                                         </div>
-                                        <select
-                                            value={selectedBookingPackageId}
-                                            onChange={(e) => setSelectedBookingPackageId(e.target.value)}
-                                            className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground"
-                                        >
-                                            {eligibleBookingPackages.map((pkg) => (
-                                                <option key={pkg.id} value={pkg.id}>
-                                                    {pkg.packageName} ({pkg.source === "membership" ? "Membership" : "Package"}) - {pkg.remaining} left
-                                                </option>
-                                            ))}
-                                        </select>
+                                        <Select value={selectedBookingPackageId} onValueChange={setSelectedBookingPackageId}>
+                                            <SelectTrigger className="w-full rounded-xl border-border bg-card text-sm font-semibold text-foreground h-11">
+                                                <SelectValue placeholder="Select package" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {eligibleBookingPackages.map((pkg) => (
+                                                    <SelectItem key={pkg.id} value={pkg.id}>
+                                                        {pkg.packageName} ({pkg.source === "membership" ? "Membership" : "Package"}) - {pkg.remaining} left
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 )}
 
