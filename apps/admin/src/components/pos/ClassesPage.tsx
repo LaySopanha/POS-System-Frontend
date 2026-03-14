@@ -40,6 +40,15 @@ const bookingStatusConfig: Record<string, { icon: typeof CheckCircle2; className
   no_show: { icon: UserX, className: "text-muted-foreground", label: "No-Show" },
 };
 
+const canonicalServiceTypeLabel = (name?: string | null): string => {
+  const raw = (name || "").trim();
+  const compact = raw.toLowerCase().replace(/[_\s]+/g, "-");
+  if (compact.includes("cardilac") || compact.includes("cadilac") || compact.includes("cadillac") || compact.includes("classical-cadillac")) {
+    return "Cadillac";
+  }
+  return raw || "Class";
+};
+
 const emptySlotForm = {
   serviceTypeId: "", instructorId: "", date: "",
   startTime: "09:00", endTime: "10:00", capacity: "10",
@@ -323,7 +332,7 @@ const ClassesPage = () => {
               <SelectContent>
                 <SelectItem value="all">All Classes</SelectItem>
                 {serviceTypes.map(st => (
-                  <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
+                  <SelectItem key={st.id} value={st.id}>{canonicalServiceTypeLabel(st.name)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -393,13 +402,13 @@ const ClassesPage = () => {
                         className="font-bold text-foreground text-[15px] mb-1 cursor-pointer hover:underline" 
                         onClick={() => setSelectedClassId(cls.id)}
                       >
-                        {cls.service_type?.name ?? "Class"}
+                        {canonicalServiceTypeLabel(cls.service_type?.name)}
                       </div>
                       <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
                         <span>{getInstructorName(cls)}</span>
                         <span>·</span>
                         <span className="font-bold uppercase tracking-wider rounded-md bg-emerald-100/80 text-emerald-700 px-1.5 py-0.5 text-[10px]">
-                          {cls.service_type?.name ?? "GROUP"}
+                          {canonicalServiceTypeLabel(cls.service_type?.name)}
                         </span>
                       </div>
                     </td>
@@ -502,7 +511,7 @@ const ClassesPage = () => {
                           }}
                           className="rounded-md border border-border bg-background px-2 py-1 text-[10px] leading-tight"
                         >
-                          <div className="font-semibold text-foreground truncate">{s.service_type?.name ?? "Class"}</div>
+                          <div className="font-semibold text-foreground truncate">{canonicalServiceTypeLabel(s.service_type?.name)}</div>
                           <div className="text-muted-foreground">{s.start_time.slice(0, 5)}-{s.end_time.slice(0, 5)}</div>
                         </div>
                       ))}
@@ -537,7 +546,7 @@ const ClassesPage = () => {
                   return (
                     <tr key={b.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3 text-sm font-medium text-foreground">{userName}</td>
-                      <td className="px-4 py-3 text-sm text-foreground">{s.service_type?.name ?? "—"}</td>
+                      <td className="px-4 py-3 text-sm text-foreground">{canonicalServiceTypeLabel(s.service_type?.name)}</td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">{s.start_time.slice(0, 5)}</td>
                       <td className="px-4 py-3">
                         <div className={cn("flex items-center gap-1.5 text-xs font-semibold capitalize", bookingStatusConfig[b.status]?.className)}>
@@ -568,7 +577,7 @@ const ClassesPage = () => {
               <>
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
-                    {selectedClass.service_type?.name ?? "Class"}
+                    {canonicalServiceTypeLabel(selectedClass.service_type?.name)}
                     <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", statusColors[selectedClass.status])}>
                       {selectedClass.status.replace("_", " ")}
                     </span>
@@ -706,7 +715,7 @@ const ClassesPage = () => {
               <div className="space-y-1.5"><Label>Service Type</Label>
                 <Select value={editForm.serviceTypeId} onValueChange={(v) => setEditForm(f => ({ ...f, serviceTypeId: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{serviceTypes.map(st => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{serviceTypes.map(st => <SelectItem key={st.id} value={st.id}>{canonicalServiceTypeLabel(st.name)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5"><Label>Instructor (Optional)</Label>
@@ -778,7 +787,7 @@ const ClassesPage = () => {
               <div className="space-y-1.5"><Label>Service Type</Label>
                 <Select value={slotForm.serviceTypeId} onValueChange={(v) => setSlotForm(f => ({ ...f, serviceTypeId: v }))}>
                   <SelectTrigger><SelectValue placeholder="Select service type" /></SelectTrigger>
-                  <SelectContent>{serviceTypes.map(st => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{serviceTypes.map(st => <SelectItem key={st.id} value={st.id}>{canonicalServiceTypeLabel(st.name)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5"><Label>Instructor (Optional)</Label>

@@ -6,12 +6,14 @@ import { useTranslation } from "react-i18next";
 interface PackageDetailViewProps {
     selectedPackage: ClassPackage | null;
     selectedMembership: MembershipPlan | null;
+    recoveryPackagePurchaseDiscountPercent?: number;
     handleAddDetailToCart: () => void;
 }
 
 const PackageDetailPage: React.FC<PackageDetailViewProps> = ({
     selectedPackage,
     selectedMembership,
+    recoveryPackagePurchaseDiscountPercent = 0,
     handleAddDetailToCart,
 }) => {
     const { t } = useTranslation();
@@ -19,6 +21,12 @@ const PackageDetailPage: React.FC<PackageDetailViewProps> = ({
     if (!item) return null;
 
     const isMembership = "includes" in item;
+    const hasRecoveryPurchaseDiscount = !isMembership
+        && (item as ClassPackage).classTypeId === "recovery-lounge"
+        && recoveryPackagePurchaseDiscountPercent > 0;
+    const discountedPrice = hasRecoveryPurchaseDiscount
+        ? Math.round(item.price * (1 - recoveryPackagePurchaseDiscountPercent / 100) * 100) / 100
+        : item.price;
 
     return (
         <div className="flex min-h-[80vh] flex-col items-center justify-center">
@@ -32,11 +40,19 @@ const PackageDetailPage: React.FC<PackageDetailViewProps> = ({
                             </p>
                         )}
                         <div className="pt-4 flex items-center justify-center gap-1">
+                            {hasRecoveryPurchaseDiscount && (
+                                <span className="text-base text-muted-foreground/70 line-through mr-2">${item.price.toFixed(2)}</span>
+                            )}
                             <span className="text-5xl font-bold text-primary" style={{ fontFamily: "var(--font-serif)" }}>
-                                <span className="text-2xl opacity-60 font-medium mr-1">$</span>{item.price}
+                                <span className="text-2xl opacity-60 font-medium mr-1">$</span>{discountedPrice.toFixed(2)}
                             </span>
                             <span className="text-sm text-muted-foreground ml-2">/ {item.validity}</span>
                         </div>
+                        {hasRecoveryPurchaseDiscount && (
+                            <p className="text-xs font-semibold text-emerald-700">
+                                Active package benefit: {recoveryPackagePurchaseDiscountPercent}% off recovery package purchase
+                            </p>
+                        )}
                     </div>
 
                     <div className="space-y-4 px-2">
@@ -86,7 +102,7 @@ const PackageDetailPage: React.FC<PackageDetailViewProps> = ({
                         onClick={handleAddDetailToCart}
                         className="w-full rounded-2xl bg-primary py-4 text-sm font-bold text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl active:scale-[0.98] mt-4"
                     >
-                        {t('add_to_cart')} — ${item.price}
+                        {t('add_to_cart')} — ${discountedPrice.toFixed(2)}
                     </button>
                 </div>
             </div>

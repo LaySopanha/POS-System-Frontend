@@ -33,6 +33,15 @@ const emptyForm: FormData = {
   isActive: true,
 };
 
+const canonicalServiceTypeLabel = (name?: string | null): string => {
+  const raw = (name || "").trim();
+  const compact = raw.toLowerCase().replace(/[_\s]+/g, "-");
+  if (compact.includes("cardilac") || compact.includes("cadilac") || compact.includes("cadillac") || compact.includes("classical-cadillac")) {
+    return "Cadillac";
+  }
+  return raw || "Class";
+};
+
 const ClassManagement = () => {
   const { data: serviceTypes = [], isLoading } = useApiServiceTypes();
   const createType = useCreateServiceType();
@@ -155,7 +164,7 @@ const ClassManagement = () => {
             {filtered.map((t) => (
               <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                 <td className="px-4 py-3">
-                  <p className="text-sm font-semibold text-foreground">{t.name}</p>
+                  <p className="text-sm font-semibold text-foreground">{canonicalServiceTypeLabel(t.name)}</p>
                 </td>
                 <td className="px-4 py-3">
                   <p className="text-sm text-muted-foreground max-w-xs truncate">{t.description || "—"}</p>

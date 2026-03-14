@@ -99,6 +99,7 @@ export const useZenPortal = () => {
     const [accountTab, setAccountTab] = useState<AccountTab>("dashboard");
     const [postAuthPath, setPostAuthPath] = useState<string | null>(null);
     const [rescheduleFromBookingId, setRescheduleFromBookingId] = useState<string | null>(null);
+    const [selectedBookingPackageId, setSelectedBookingPackageId] = useState<string>("");
 
     // Persistence Effects
     useEffect(() => {
@@ -125,6 +126,7 @@ export const useZenPortal = () => {
         if (compact.includes("intro")) return "reformer";
         if (compact.includes("recovery")) return "recovery-lounge";
         if (compact.includes("hot")) return "hot-pilates";
+        if (compact.includes("cardilac") || compact.includes("cadilac")) return "cadillac";
         if (compact.includes("reformer")) return "reformer";
         if (compact.includes("cadillac")) return "cadillac";
         if (compact.includes("membership")) return "membership";
@@ -146,6 +148,37 @@ export const useZenPortal = () => {
         }
 
         return 0;
+    };
+
+    const parsePackageBenefitValue = (benefits: unknown, pattern: RegExp): number => {
+        if (!Array.isArray(benefits)) return 0;
+
+        for (const item of benefits) {
+            if (typeof item !== "string") continue;
+            const match = item.match(pattern);
+            if (match) return Number(match[1] || 0);
+        }
+
+        return 0;
+    };
+
+    const parseRecoveryPurchaseDiscountPercent = (benefits: unknown): number => {
+        if (!Array.isArray(benefits)) return 0;
+
+        let maxPercent = 0;
+        for (const item of benefits) {
+            if (typeof item !== "string") continue;
+            const text = item.toLowerCase();
+            if (!text.includes("recovery")) continue;
+
+            const match = text.match(/(\d+)\s*%\s*off/) || text.match(/off\s*(\d+)\s*%/);
+            if (!match) continue;
+
+            const percent = Math.max(0, Math.min(100, Number(match[1] || 0)));
+            if (percent > maxPercent) maxPercent = percent;
+        }
+
+        return maxPercent;
     };
 
     const bookingUsageByPackage = useMemo(() => {
@@ -285,6 +318,65 @@ export const useZenPortal = () => {
         return credits;
     }, [apiPackages, bookingUsageByPackage]);
 
+    const nonMembershipRecoveryBenefitsByPackage = useMemo(() => {
+        const benefitsByPackage: Record<string, { freeRecoveryRemaining: number; discountPercent: number; discountedRecoveryRemaining: number }> = {};
+        if (!apiPackages) return benefitsByPackage;
+
+        for (const up of apiPackages) {
+            const packageType = (up.package?.package_type || "").toLowerCase();
+            const serviceTypeName = normalizeClassType(up.package?.service_type?.name);
+            const isMembershipPackage = packageType.includes("membership") || serviceTypeName === "membership";
+            if (isMembershipPackage) continue;
+
+            const usage = bookingUsageByPackage[up.id] || { total: 0, class: 0, recovery: 0 };
+            const freeRecoveryTotal = parsePackageBenefitValue(up.package?.benefits, /(\d+)\s*free.*recovery/i);
+            const discountPercent = parsePackageBenefitValue(up.package?.benefits, /(\d+)\s*%\s*off/i);
+            const discountedRecoveryTotal = parsePackageBenefitValue(up.package?.benefits, /(\d+)\s*recovery\s*sessions?/i);
+
+            benefitsByPackage[up.id] = {
+                freeRecoveryRemaining: Math.max(0, freeRecoveryTotal - usage.recovery),
+                discountPercent,
+                discountedRecoveryRemaining: Math.max(0, discountedRecoveryTotal - usage.recovery),
+            };
+        }
+
+        return benefitsByPackage;
+    }, [apiPackages, bookingUsageByPackage]);
+
+    const recoveryPackagePurchaseDiscount = useMemo(() => {
+        let bestPercent = 0;
+        let sourcePackageName: string | null = null;
+        if (!apiPackages) return { percent: 0, sourcePackageName };
+
+        const now = Date.now();
+
+        for (const up of apiPackages) {
+            const isActiveStatus = up.status === "active" || up.status === "not_started";
+            const isConfirmed = up.payment_status === "confirmed";
+            const expiryMs = up.expiry_date ? new Date(up.expiry_date).getTime() : null;
+            const isExpired = expiryMs !== null && expiryMs < now;
+            if (!isActiveStatus || !isConfirmed || isExpired) continue;
+
+            const percent = parseRecoveryPurchaseDiscountPercent(up.package?.benefits);
+            if (percent > bestPercent) {
+                bestPercent = percent;
+                sourcePackageName = up.package?.name || "Active package";
+            }
+        }
+
+        return { percent: bestPercent, sourcePackageName };
+    }, [apiPackages]);
+
+    const getDiscountedPackagePrice = (item: ClassPackage | MembershipPlan): number => {
+        const basePrice = Number((item as any).price || 0);
+        const classTypeId = normalizeClassType((item as any)?.classTypeId);
+
+        if (classTypeId !== "recovery-lounge") return basePrice;
+        if (recoveryPackagePurchaseDiscount.percent <= 0) return basePrice;
+
+        return Math.round(basePrice * (1 - recoveryPackagePurchaseDiscount.percent / 100) * 100) / 100;
+    };
+
     // Available Packages: from backend API (public), mapped to UI types
     const classPackages: ClassPackage[] = useMemo(() => {
         if (!apiPackagesAll || !apiServiceTypes) return storeClassPackages;
@@ -411,9 +503,10 @@ export const useZenPortal = () => {
     const activePackages = useMemo(
         () => purchasedPackages.filter((p) => {
             const hasRemainingSessions = p.sessions === 0 || p.sessionsUsed < p.sessions;
-            return (p.status === "active" || p.status === "not_started") && hasRemainingSessions;
+            const hasFreeRecoveryRemaining = (nonMembershipRecoveryBenefitsByPackage[p.id]?.freeRecoveryRemaining || 0) > 0;
+            return (p.status === "active" || p.status === "not_started") && (hasRemainingSessions || hasFreeRecoveryRemaining);
         }),
-        [purchasedPackages]
+        [purchasedPackages, nonMembershipRecoveryBenefitsByPackage]
     );
 
     const sessionsRemaining = useMemo(
@@ -436,10 +529,81 @@ export const useZenPortal = () => {
                 }
             } else {
                 totals[key] = (totals[key] || 0) + remaining;
+                const freeRecoveryRemaining = nonMembershipRecoveryBenefitsByPackage[p.id]?.freeRecoveryRemaining || 0;
+                if (freeRecoveryRemaining > 0) {
+                    totals["free-recovery"] = (totals["free-recovery"] || 0) + freeRecoveryRemaining;
+                }
             }
         });
         return totals;
-    }, [activePackages, membershipCreditsByPackage]);
+    }, [activePackages, membershipCreditsByPackage, nonMembershipRecoveryBenefitsByPackage]);
+
+    const eligibleBookingPackages = useMemo(() => {
+        const selectedType = normalizeClassType(selectedClassType?.id || selectedClassType?.name);
+        if (!selectedType) return [] as Array<{ id: string; packageName: string; remaining: number; source: "package" | "membership" }>;
+
+        const matchingPackages = activePackages
+            .filter((p) => {
+                const packageType = normalizeClassType(p.classTypeId);
+                if (packageType === selectedType) return true;
+
+                if (selectedType === "recovery-lounge") {
+                    return (nonMembershipRecoveryBenefitsByPackage[p.id]?.freeRecoveryRemaining || 0) > 0;
+                }
+
+                return false;
+            })
+            .map((p) => ({
+                id: p.id,
+                packageName: p.packageName,
+                remaining: Math.max(0, p.sessions - p.sessionsUsed),
+                source: "package" as const,
+                expiresAt: p.expiresAt ? new Date(p.expiresAt).getTime() : Number.MAX_SAFE_INTEGER,
+            }))
+            .sort((a, b) => a.expiresAt - b.expiresAt);
+
+        if (matchingPackages.length > 0) {
+            return matchingPackages.map(({ expiresAt, ...rest }) => rest);
+        }
+
+        const membershipPackages = activePackages
+            .filter((p) => {
+                if (normalizeClassType(p.classTypeId) !== "membership") return false;
+                const credit = membershipCreditsByPackage[p.id];
+                if (!credit) return false;
+                if (selectedType === "recovery-lounge") return credit.recoveryRemaining > 0;
+                return credit.classRemaining > 0;
+            })
+            .map((p) => {
+                const credit = membershipCreditsByPackage[p.id];
+                const remaining = selectedType === "recovery-lounge"
+                    ? (credit?.recoveryRemaining || 0)
+                    : (credit?.classRemaining || 0);
+
+                return {
+                    id: p.id,
+                    packageName: p.packageName,
+                    remaining,
+                    source: "membership" as const,
+                    expiresAt: p.expiresAt ? new Date(p.expiresAt).getTime() : Number.MAX_SAFE_INTEGER,
+                };
+            })
+            .sort((a, b) => a.expiresAt - b.expiresAt);
+
+        return membershipPackages.map(({ expiresAt, ...rest }) => rest);
+    }, [selectedClassType, activePackages, membershipCreditsByPackage, nonMembershipRecoveryBenefitsByPackage]);
+
+    useEffect(() => {
+        if (eligibleBookingPackages.length === 0) {
+            if (selectedBookingPackageId) setSelectedBookingPackageId("");
+            return;
+        }
+
+        const exists = eligibleBookingPackages.some((p) => p.id === selectedBookingPackageId);
+        if (!exists) {
+            setSelectedBookingPackageId(eligibleBookingPackages[0].id);
+        }
+    }, [eligibleBookingPackages, selectedBookingPackageId]);
 
     const allowedClassTypes = useMemo(() => {
         // If not authenticated or no service types loaded, allow all from API
@@ -449,7 +613,8 @@ export const useZenPortal = () => {
 
         const activePkgs = purchasedPackages.filter(p =>
             (p.status === "active" || p.status === "not_started" || p.status === "inactive") &&
-            (p.sessions === 0 || p.sessionsUsed < p.sessions)
+            ((p.sessions === 0 || p.sessionsUsed < p.sessions)
+                || (nonMembershipRecoveryBenefitsByPackage[p.id]?.freeRecoveryRemaining || 0) > 0)
         );
 
         const isMembershipMember = activePkgs.some(p =>
@@ -485,11 +650,25 @@ export const useZenPortal = () => {
                 classTypesFromPackages.push("recovery-lounge");
             }
 
+            const hasExtraRecoveryFromClassPack = activePkgs.some((p) => (nonMembershipRecoveryBenefitsByPackage[p.id]?.freeRecoveryRemaining || 0) > 0);
+            if (hasExtraRecoveryFromClassPack && !classTypesFromPackages.includes("recovery-lounge")) {
+                classTypesFromPackages.push("recovery-lounge");
+            }
+
             return classTypesFromPackages;
         }
 
+        const hasRecoveryBenefit = activePkgs.some((p) => (nonMembershipRecoveryBenefitsByPackage[p.id]?.freeRecoveryRemaining || 0) > 0);
+        if (hasRecoveryBenefit) {
+            const withRecovery = Array.from(new Set(activePkgs.map(p => p.classTypeId).filter((id): id is string => !!id && id !== "membership")));
+            if (!withRecovery.includes("recovery-lounge")) {
+                withRecovery.push("recovery-lounge");
+            }
+            return withRecovery;
+        }
+
         return Array.from(new Set(activePkgs.map(p => p.classTypeId).filter((id): id is string => !!id && id !== "membership")));
-    }, [customer, purchasedPackages, apiServiceTypes, membershipCreditsByPackage]);
+    }, [customer, purchasedPackages, apiServiceTypes, membershipCreditsByPackage, nonMembershipRecoveryBenefitsByPackage]);
 
     const stepTitles: Partial<Record<PortalStep, string>> = {
         pricing: `${t('pricing')} — ${t('buy_class')}`,
@@ -709,35 +888,8 @@ export const useZenPortal = () => {
             return;
         }
 
-        // Non-membership packages are type-specific.
-        // Membership packages can book any class type.
-        const selectedType = normalizeClassType(selectedClassType?.id || selectedClassType?.name);
-        const matchingPackages = activePackages
-            .filter((p) => normalizeClassType(p.classTypeId) === selectedType)
-            .sort((a, b) => {
-                const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
-                const bExpiry = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
-                return aExpiry - bExpiry;
-            });
-
-        const membershipPackages = activePackages
-            .filter((p) => {
-                if (normalizeClassType(p.classTypeId) !== "membership") return false;
-                const credit = membershipCreditsByPackage[p.id];
-                if (!credit) return false;
-
-                if (selectedType === "recovery-lounge") return credit.recoveryRemaining > 0;
-                return credit.classRemaining > 0;
-            })
-            .sort((a, b) => {
-                const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
-                const bExpiry = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
-                return aExpiry - bExpiry;
-            });
-
-        const validMappedPkg = matchingPackages[0] || membershipPackages[0];
-        
-        const activePkg = apiPackages?.find(up => up.id === validMappedPkg?.id);
+        const chosenEligible = eligibleBookingPackages.find((p) => p.id === selectedBookingPackageId) || eligibleBookingPackages[0];
+        const activePkg = apiPackages?.find(up => up.id === chosenEligible?.id);
 
         if (!activePkg) {
             toast.error(`You don't have an active package for ${selectedClassType?.name}. Please purchase one first.`);
@@ -830,6 +982,9 @@ export const useZenPortal = () => {
         setAccountTab,
         selectedClassType,
         setSelectedClassType,
+        selectedBookingPackageId,
+        setSelectedBookingPackageId,
+        eligibleBookingPackages,
         handleSelectClassType,
         selectedPackage,
         handleSelectPackage,
@@ -845,6 +1000,7 @@ export const useZenPortal = () => {
         sessionsRemaining,
         sessionsByType,
         membershipCreditsByPackage,
+        nonMembershipRecoveryBenefitsByPackage,
         canReschedule,
         handleCancelBooking,
         handleStartReschedule,
@@ -856,6 +1012,8 @@ export const useZenPortal = () => {
         classPackages,
         membershipPlans,
         allowedClassTypes,
+        recoveryPackagePurchaseDiscount,
+        getDiscountedPackagePrice,
         pendingConfirmEmail,
         setPendingConfirmEmail,
         loyaltyData,

@@ -7,6 +7,7 @@ interface ClassPackagesViewProps {
     selectedClassType: ClassType | null;
     classPackages: ClassPackage[];
     membershipPlans: MembershipPlan[];
+    recoveryPackagePurchaseDiscountPercent?: number;
     handleSelectPackage: (pkg: ClassPackage) => void;
     handleSelectMembership: (plan: MembershipPlan) => void;
 }
@@ -15,6 +16,7 @@ const ClassPackagesPage: React.FC<ClassPackagesViewProps> = ({
     selectedClassType,
     classPackages,
     membershipPlans,
+    recoveryPackagePurchaseDiscountPercent = 0,
     handleSelectPackage,
     handleSelectMembership,
 }) => {
@@ -50,6 +52,13 @@ const ClassPackagesPage: React.FC<ClassPackagesViewProps> = ({
                     {!isMembershipCategory ? (
                         filteredPackages.map((pkg) => {
                             const isIntro = pkg.name.toLowerCase().includes("intro");
+                            const hasRecoveryPurchaseDiscount = pkg.classTypeId === "recovery-lounge" && recoveryPackagePurchaseDiscountPercent > 0;
+                            const discountedPrice = hasRecoveryPurchaseDiscount
+                                ? Math.round(pkg.price * (1 - recoveryPackagePurchaseDiscountPercent / 100) * 100) / 100
+                                : pkg.price;
+                            const displayedPerSession = pkg.sessions > 0 && pkg.sessions < 900
+                                ? discountedPrice / pkg.sessions
+                                : pkg.pricePerSession;
                             return (
                                 <button
                                     key={pkg.id}
@@ -66,18 +75,29 @@ const ClassPackagesPage: React.FC<ClassPackagesViewProps> = ({
                                             {t('intro_offer')}
                                         </div>
                                     )}
+                                    {hasRecoveryPurchaseDiscount && (
+                                        <div className="absolute top-6 right-6 rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                                            {recoveryPackagePurchaseDiscountPercent}% OFF
+                                        </div>
+                                    )}
                                     <div className="space-y-1 pt-4">
                                         <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground opacity-80">
                                             {pkg.name}
                                         </p>
                                         <div className="flex flex-col items-center">
+                                            {hasRecoveryPurchaseDiscount && (
+                                                <p className="text-xs font-bold text-muted-foreground/70 line-through">${pkg.price.toFixed(2)}</p>
+                                            )}
                                             <span className="text-4xl font-bold text-foreground" style={{ fontFamily: "var(--font-serif)" }}>
-                                                <span className="text-2xl">$</span>{pkg.price}
+                                                <span className="text-2xl">$</span>{discountedPrice.toFixed(2)}
                                             </span>
                                             <p className="text-[10px] font-bold font-display text-muted-foreground/60">
-                                                (<span className="text-[16px] text-primary">${pkg.pricePerSession}</span>/session)
+                                                (<span className="text-[16px] text-primary">${displayedPerSession.toFixed(2)}</span>/session)
                                             </p>
                                         </div>
+                                        {hasRecoveryPurchaseDiscount && (
+                                            <p className="text-[10px] font-semibold text-emerald-700 mt-1">Active package benefit applied</p>
+                                        )}
                                         <p className="mt-4 text-xs font-medium text-muted-foreground leading-relaxed max-w-[150px] mx-auto opacity-70">
                                             {pkg.sessions === 999
                                                 ? t('unlimited_sessions')

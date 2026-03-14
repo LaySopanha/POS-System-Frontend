@@ -23,11 +23,15 @@ const CartPanel = ({ items, onUpdateQty, onRemove, onClear, onPlaceOrder, isSubm
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "aba">("cash");
   const [receivedAmount, setReceivedAmount] = useState("");
   const [discountCode, setDiscountCode] = useState("");
-  const [showDiscountInput, setShowDiscountInput] = useState(false);
+  const [memberDiscountPercent, setMemberDiscountPercent] = useState("10");
 
   const subtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const tax = subtotal * 0.1;
-  const total = subtotal + tax;
+  const matchedMemberCode = discountCode.trim().toUpperCase().match(/^MEMBER(\d{1,3})$/);
+  const memberPercent = matchedMemberCode ? Math.max(0, Math.min(100, Number(matchedMemberCode[1] || 0))) : 0;
+  const discountAmount = Math.round(subtotal * (memberPercent / 100) * 100) / 100;
+  const taxableAmount = Math.max(0, subtotal - discountAmount);
+  const tax = taxableAmount * 0.1;
+  const total = taxableAmount + tax;
 
   const received = parseFloat(receivedAmount) || 0;
   const change = Math.max(0, received - total);
@@ -41,7 +45,6 @@ const CartPanel = ({ items, onUpdateQty, onRemove, onClear, onPlaceOrder, isSubm
     await onPlaceOrder({ orderType, paymentMethod, receivedAmount: received, discountCode });
     setReceivedAmount("");
     setDiscountCode("");
-    setShowDiscountInput(false);
   };
 
   return (
@@ -240,51 +243,68 @@ const CartPanel = ({ items, onUpdateQty, onRemove, onClear, onPlaceOrder, isSubm
           )}
         </div>
 
-        {/* Collapsible Details */}
+        {/* Pricing + Discount */}
         <div className="rounded-xl border border-border bg-card p-3 space-y-2">
           {items.length > 0 && (
-            <div
-              className="group cursor-pointer space-y-2"
-              onClick={() => setShowDiscountInput(!showDiscountInput)}
-            >
-              {showDiscountInput ? (
-                <div className="space-y-2 pt-1 pb-2 border-b border-dashed border-border animate-in fade-in duration-200">
-                  <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
-                    <span>Subtotal</span>
-                    <span>${subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
-                    <span>Tax (10%)</span>
-                    <span>${tax.toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center gap-2 pt-1">
-                    <div className="relative flex-1">
-                      <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-                      <Input
-                        placeholder="Promo code"
-                        value={discountCode}
-                        onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
-                        className="pl-7 h-7 text-[10px] bg-muted/50 uppercase tracking-widest"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setDiscountCode(""); setShowDiscountInput(false); }}
-                      className="text-[10px] font-bold text-muted-foreground hover:text-foreground"
-                    >
-                      Hide
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium hover:text-foreground transition-colors">
-                  <span className="flex items-center gap-1.5 italic">
-                    <Tag className="h-3 w-3" />
-                    Expand pricing details...
-                  </span>
-                  {discountCode && <span className="font-bold text-primary">{discountCode}</span>}
+            <div className="space-y-2 pt-1 pb-2 border-b border-dashed border-border animate-in fade-in duration-200">
+              <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
+                <span>Subtotal</span>
+                <span>${subtotal.toFixed(2)}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-[11px] text-primary font-semibold">
+                  <span>Discount ({memberPercent}%)</span>
+                  <span>-${discountAmount.toFixed(2)}</span>
                 </div>
               )}
+              <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
+                <span>Tax (10%)</span>
+                <span>${tax.toFixed(2)}</span>
+              </div>
+
+              <div className="space-y-1.5 pt-1">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Discount Code</Label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                    <Input
+                      placeholder="Enter code"
+                      value={discountCode}
+                      onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
+                      className="pl-7 h-8 text-[10px] bg-muted/50 uppercase tracking-widest"
+                    />
+                  </div>
+                  <button
+                    onClick={() => setDiscountCode("")}
+                    className="text-[10px] font-bold text-muted-foreground hover:text-foreground"
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="w-24">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={memberDiscountPercent}
+                      onChange={(e) => setMemberDiscountPercent(e.target.value)}
+                      className="h-8 text-[10px] font-bold bg-muted/50"
+                    />
+                  </div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">%</span>
+                  <button
+                    onClick={() => {
+                      const pct = Math.max(0, Math.min(100, Number(memberDiscountPercent) || 0));
+                      setDiscountCode(`MEMBER${pct}`);
+                    }}
+                    className="text-[10px] font-bold text-primary hover:text-primary/80 uppercase tracking-wider"
+                  >
+                    Member card shown
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

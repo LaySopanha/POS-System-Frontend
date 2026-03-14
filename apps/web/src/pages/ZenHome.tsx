@@ -51,6 +51,9 @@ const ZenHome = () => {
     setAccountTab,
     selectedClassType,
     setSelectedClassType,
+    selectedBookingPackageId,
+    setSelectedBookingPackageId,
+    eligibleBookingPackages,
     handleSelectClassType,
     selectedPackage,
     handleSelectPackage,
@@ -66,6 +69,9 @@ const ZenHome = () => {
     sessionsRemaining,
     sessionsByType,
     membershipCreditsByPackage,
+    nonMembershipRecoveryBenefitsByPackage,
+    recoveryPackagePurchaseDiscount,
+    getDiscountedPackagePrice,
     allowedClassTypes,
     canReschedule,
     handleCancelBooking,
@@ -123,6 +129,7 @@ const ZenHome = () => {
             selectedClassType={selectedClassType}
             classPackages={classPackages}
             membershipPlans={membershipPlans}
+            recoveryPackagePurchaseDiscountPercent={recoveryPackagePurchaseDiscount.percent}
             handleSelectPackage={handleSelectPackage}
             handleSelectMembership={handleSelectMembership}
           />
@@ -132,6 +139,7 @@ const ZenHome = () => {
           <PackageDetailPage
             selectedPackage={selectedPackage}
             selectedMembership={selectedMembership}
+            recoveryPackagePurchaseDiscountPercent={recoveryPackagePurchaseDiscount.percent}
             handleAddDetailToCart={() => {
               if (selectedPackage) { addToCart(selectedPackage); navigate("/packages"); }
               else if (selectedMembership) { addToCart(selectedMembership); navigate("/packages"); }
@@ -192,6 +200,9 @@ const ZenHome = () => {
             // For the new Book a Class tab
             selectedClassType={selectedClassType}
             setSelectedClassType={setSelectedClassType}
+            selectedBookingPackageId={selectedBookingPackageId}
+            setSelectedBookingPackageId={setSelectedBookingPackageId}
+            eligibleBookingPackages={eligibleBookingPackages}
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
             availableTimes={availableTimes}
@@ -201,6 +212,7 @@ const ZenHome = () => {
             sessionsRemaining={sessionsRemaining}
             sessionsByType={sessionsByType}
             membershipCreditsByPackage={membershipCreditsByPackage}
+            nonMembershipRecoveryBenefitsByPackage={nonMembershipRecoveryBenefitsByPackage}
             allowedClassTypes={allowedClassTypes}
             loyaltyData={loyaltyData}
             statsData={statsData}
@@ -224,31 +236,86 @@ const ZenHome = () => {
                 <button onClick={() => setShowCart(false)} className="text-[10px] font-bold text-muted-foreground hover:text-foreground uppercase tracking-widest">{t('close')}</button>
               </div>
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {cart.length === 0 ? (
-                  <div className="text-center py-20 flex flex-col items-center">
-                    <p className="text-sm text-muted-foreground mb-4">{t('cart_empty')}</p>
-                    <button onClick={() => { setShowCart(false); navigate("/pricing"); }} className="text-primary font-bold text-xs uppercase tracking-widest">{t('browse_packages_btn')}</button>
-                  </div>
-                ) : (
-                  cart.map((item, idx) => (
-                    <div key={idx} className="group relative p-5 rounded-[1.5rem] bg-muted/30 border border-border/50 transition-all hover:bg-muted/40">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-bold text-sm text-foreground uppercase tracking-tight">{item.name}</p>
-                          <p className="text-xs text-muted-foreground mt-1">${(item as any).price} · {item.validity}</p>
-                        </div>
-                        <button onClick={() => removeFromCart(idx)} className="text-[10px] font-bold text-destructive/70 hover:text-destructive uppercase tracking-widest">{t('remove')}</button>
-                      </div>
+                {(() => {
+                  const subtotal = cart.reduce((s, i: any) => s + Number(i.price || 0), 0);
+                  const discountedSubtotal = cart.reduce((s, i: any) => s + getDiscountedPackagePrice(i), 0);
+                  const discountAmount = Math.max(0, subtotal - discountedSubtotal);
+
+                  return cart.length === 0 ? (
+                    <div className="text-center py-20 flex flex-col items-center">
+                      <p className="text-sm text-muted-foreground mb-4">{t('cart_empty')}</p>
+                      <button onClick={() => { setShowCart(false); navigate("/pricing"); }} className="text-primary font-bold text-xs uppercase tracking-widest">{t('browse_packages_btn')}</button>
                     </div>
-                  ))
-                )}
+                  ) : (
+                    <>
+                      {cart.map((item, idx) => {
+                        const basePrice = Number((item as any).price || 0);
+                        const finalPrice = getDiscountedPackagePrice(item as any);
+                        const hasDiscount = finalPrice < basePrice;
+
+                        return (
+                          <div key={idx} className="group relative p-5 rounded-[1.5rem] bg-muted/30 border border-border/50 transition-all hover:bg-muted/40">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="font-bold text-sm text-foreground uppercase tracking-tight">{item.name}</p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {hasDiscount && <span className="line-through mr-1">${basePrice.toFixed(2)}</span>}
+                                  ${finalPrice.toFixed(2)} · {item.validity}
+                                </p>
+                                {hasDiscount && (
+                                  <p className="text-[10px] text-emerald-700 font-semibold mt-1">
+                                    {recoveryPackagePurchaseDiscount.percent}% recovery discount from active package
+                                  </p>
+                                )}
+                              </div>
+                              <button onClick={() => removeFromCart(idx)} className="text-[10px] font-bold text-destructive/70 hover:text-destructive uppercase tracking-widest">{t('remove')}</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {discountAmount > 0 && (
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+                          <p className="text-xs font-semibold text-emerald-800">
+                            Recovery benefit applied: -${discountAmount.toFixed(2)} ({recoveryPackagePurchaseDiscount.percent}% off)
+                          </p>
+                          {recoveryPackagePurchaseDiscount.sourcePackageName && (
+                            <p className="text-[11px] text-emerald-700/90 mt-1">
+                              From active package: {recoveryPackagePurchaseDiscount.sourcePackageName}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               {cart.length > 0 && (
                 <div className="p-6 border-t border-border bg-muted/10 space-y-4">
-                  <div className="flex justify-between items-center px-1">
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('total_label')}</span>
-                    <span className="text-2xl font-black text-foreground">$ {cart.reduce((s, i: any) => s + i.price, 0)}</span>
-                  </div>
+                  {(() => {
+                    const subtotal = cart.reduce((s, i: any) => s + Number(i.price || 0), 0);
+                    const discountedSubtotal = cart.reduce((s, i: any) => s + getDiscountedPackagePrice(i), 0);
+                    const discountAmount = Math.max(0, subtotal - discountedSubtotal);
+
+                    return (
+                      <>
+                        <div className="flex justify-between items-center px-1">
+                          <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Subtotal</span>
+                          <span className="text-sm font-bold text-foreground">$ {subtotal.toFixed(2)}</span>
+                        </div>
+                        {discountAmount > 0 && (
+                          <div className="flex justify-between items-center px-1">
+                            <span className="text-xs font-bold text-emerald-700 uppercase tracking-widest">Recovery Discount</span>
+                            <span className="text-sm font-bold text-emerald-700">- $ {discountAmount.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center px-1">
+                          <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('total_label')}</span>
+                          <span className="text-2xl font-black text-foreground">$ {discountedSubtotal.toFixed(2)}</span>
+                        </div>
+                      </>
+                    );
+                  })()}
                   <button 
                     onClick={handleCheckoutCart} 
                     disabled={isPurchaseLoading}

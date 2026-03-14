@@ -32,6 +32,9 @@ interface AccountPageProps {
     // New scheduling props
     selectedClassType: any;
     setSelectedClassType: (ct: any) => void;
+    selectedBookingPackageId: string;
+    setSelectedBookingPackageId: (id: string) => void;
+    eligibleBookingPackages: Array<{ id: string; packageName: string; remaining: number; source: "package" | "membership" }>;
     selectedDate: Date | undefined;
     setSelectedDate: (date: Date | undefined) => void;
     availableTimes: any[];
@@ -41,6 +44,7 @@ interface AccountPageProps {
     sessionsRemaining: number;
     sessionsByType: Record<string, number>;
     membershipCreditsByPackage: Record<string, { classRemaining: number; recoveryRemaining: number }>;
+    nonMembershipRecoveryBenefitsByPackage: Record<string, { freeRecoveryRemaining: number; discountPercent: number; discountedRecoveryRemaining: number }>;
     allowedClassTypes: string[];
     loyaltyData?: LoyaltyInfo;
     statsData?: CustomerStats;
@@ -62,6 +66,9 @@ const AccountPage: React.FC<AccountPageProps> = ({
     handleCancelRescheduleMode,
     selectedClassType,
     setSelectedClassType,
+    selectedBookingPackageId,
+    setSelectedBookingPackageId,
+    eligibleBookingPackages,
     selectedDate,
     setSelectedDate,
     availableTimes,
@@ -71,6 +78,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
     sessionsRemaining: totalSessionsRemaining,
     sessionsByType,
     membershipCreditsByPackage,
+    nonMembershipRecoveryBenefitsByPackage,
     allowedClassTypes,
     loyaltyData,
     statsData,
@@ -104,7 +112,8 @@ const AccountPage: React.FC<AccountPageProps> = ({
     const [isPasswordUpdating, setIsPasswordUpdating] = React.useState(false);
 
     const activePkgs = purchasedPackages.filter(p =>
-        (p.status === "active" || p.status === "inactive" || p.status === "not_started") && p.sessionsUsed < p.sessions
+        (p.status === "active" || p.status === "inactive" || p.status === "not_started")
+        && (p.sessionsUsed < p.sessions || (nonMembershipRecoveryBenefitsByPackage[p.id]?.freeRecoveryRemaining || 0) > 0)
     );
     const pastPkgs = purchasedPackages.filter(p => p.status === "expired" || p.sessionsUsed >= p.sessions);
     const now = new Date();
@@ -160,6 +169,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
     const formatSessionTypeLabel = (type: string) => {
         if (type === "membership-classes") return "Membership Class Credits";
         if (type === "membership-recovery") return "Membership Recovery Passes";
+        if (type === "free-recovery") return "Free Recovery Sessions";
         return type.replace(/-/g, " ");
     };
 
@@ -456,6 +466,16 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                                         <p className="text-[9px] font-black text-matcha uppercase tracking-wider">Recovery passes left: {membershipCreditsByPackage[pkg.id].recoveryRemaining}</p>
                                                     </div>
                                                 )}
+                                                {pkg.classTypeId !== "membership" && nonMembershipRecoveryBenefitsByPackage[pkg.id] && (
+                                                    <div className="mt-3 space-y-1 text-left">
+                                                        {(nonMembershipRecoveryBenefitsByPackage[pkg.id].freeRecoveryRemaining || 0) > 0 && (
+                                                            <p className="text-[9px] font-black text-matcha uppercase tracking-wider">Free recovery left: {nonMembershipRecoveryBenefitsByPackage[pkg.id].freeRecoveryRemaining}</p>
+                                                        )}
+                                                        {(nonMembershipRecoveryBenefitsByPackage[pkg.id].discountPercent || 0) > 0 && (
+                                                            <p className="text-[9px] font-black text-primary uppercase tracking-wider">Recovery discount: {nonMembershipRecoveryBenefitsByPackage[pkg.id].discountPercent}%</p>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
@@ -488,6 +508,16 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                                         <>
                                                             <span className="text-[10px] bg-card border border-primary/30 rounded-xl px-3 py-1.5 font-bold text-primary">Class credits left: {membershipCreditsByPackage[pkg.id].classRemaining}</span>
                                                             <span className="text-[10px] bg-card border border-matcha/30 rounded-xl px-3 py-1.5 font-bold text-matcha">Recovery passes left: {membershipCreditsByPackage[pkg.id].recoveryRemaining}</span>
+                                                        </>
+                                                    )}
+                                                    {pkg.classTypeId !== "membership" && nonMembershipRecoveryBenefitsByPackage[pkg.id] && (
+                                                        <>
+                                                            {(nonMembershipRecoveryBenefitsByPackage[pkg.id].freeRecoveryRemaining || 0) > 0 && (
+                                                                <span className="text-[10px] bg-card border border-matcha/30 rounded-xl px-3 py-1.5 font-bold text-matcha">Free recovery left: {nonMembershipRecoveryBenefitsByPackage[pkg.id].freeRecoveryRemaining}</span>
+                                                            )}
+                                                            {(nonMembershipRecoveryBenefitsByPackage[pkg.id].discountPercent || 0) > 0 && (
+                                                                <span className="text-[10px] bg-card border border-primary/30 rounded-xl px-3 py-1.5 font-bold text-primary">Recovery discount {nonMembershipRecoveryBenefitsByPackage[pkg.id].discountPercent}% ({nonMembershipRecoveryBenefitsByPackage[pkg.id].discountedRecoveryRemaining} sessions)</span>
+                                                            )}
                                                         </>
                                                     )}
                                                     {pkg.benefits?.map((benefit, i) => (
@@ -789,6 +819,26 @@ const AccountPage: React.FC<AccountPageProps> = ({
 
                         {selectedClassType && (
                             <div className="space-y-6 animate-in fade-in duration-300">
+                                {eligibleBookingPackages.length > 0 && (
+                                    <div className="bg-white/40 backdrop-blur-md rounded-[2rem] p-5 border border-white/40 shadow-sm space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="font-bold text-zen-dark text-sm">Deduct session from</h3>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">One package only</span>
+                                        </div>
+                                        <select
+                                            value={selectedBookingPackageId}
+                                            onChange={(e) => setSelectedBookingPackageId(e.target.value)}
+                                            className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground"
+                                        >
+                                            {eligibleBookingPackages.map((pkg) => (
+                                                <option key={pkg.id} value={pkg.id}>
+                                                    {pkg.packageName} ({pkg.source === "membership" ? "Membership" : "Package"}) - {pkg.remaining} left
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
                                 {/* Simple Weekly Calendar Placeholder */}
                                 <div className="bg-white/40 backdrop-blur-md rounded-[2rem] p-6 border border-white/40 shadow-sm">
                                     <div className="flex items-center justify-between mb-4">
