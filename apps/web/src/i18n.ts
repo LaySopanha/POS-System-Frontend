@@ -198,6 +198,7 @@ const resources = {
             "no_active_package": "No active pack",
             "class_type_descriptions": "Class Type Descriptions",
             "no_active_packs": "No active packages found",
+            "no_description_available": "No class description available.",
             "late-cancel": "Late Cancellation",
             "no-show": "No Show",
             "hide_details": "Hide Details"
@@ -402,6 +403,7 @@ const resources = {
             "no_active_package": "មិនមានកញ្ចប់សកម្ម",
             "class_type_descriptions": "ព័ត៌មានលម្អិតពីប្រភេទថ្នាក់រៀន",
             "no_active_packs": "មិនមានកញ្ចប់សកម្មឡើយ",
+            "no_description_available": "មិនមានព័ត៌មានលម្អិតអំពីថ្នាក់រៀនទេ។",
             "late-cancel": "បានលុបចោលយឺតពេល",
             "no-show": "មិនបានមក",
             "hide_details": "លាក់ព័ត៌មាន"

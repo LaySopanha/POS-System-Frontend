@@ -402,7 +402,7 @@ const CustomerPackagesPage = () => {
                 <Select value={editForm.status} onValueChange={(v) => setEditForm(f => ({ ...f, status: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["active", "pending", "expired", "exhausted", "cancelled"].map(s => (
+                    {["active", "not_started", "pending", "expired", "exhausted", "cancelled"].map(s => (
                       <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
                     ))}
                   </SelectContent>

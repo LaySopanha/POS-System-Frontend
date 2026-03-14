@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Clock, Users, Calendar, ChevronRight, AlertCircle, CheckCircle2, XCircle, UserX, Plus, Pencil, Loader2, Trash2 } from "lucide-react";
+import { Clock, Users, Calendar, AlertCircle, CheckCircle2, XCircle, UserX, Plus, Pencil, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@repo/ui";
 import { Button } from "@repo/ui";
 import { Skeleton } from "@repo/ui";
@@ -18,12 +18,12 @@ import {
   useCreateSchedule,
   useUpdateSchedule,
   useDeleteSchedule,
+  useUpdateBookingAttendance,
   type ApiSchedule,
-  type ApiBooking,
 } from "@repo/store";
 import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui";
 import { Calendar as CalendarComponent } from "@repo/ui";
-import { format } from "date-fns";
+import { addDays, addMonths, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, parseISO, startOfMonth, startOfWeek, subMonths } from "date-fns";
 
 const statusColors: Record<string, string> = {
   available: "bg-blue-50 text-blue-600 border-blue-100",
@@ -50,14 +50,27 @@ const ClassesPage = () => {
   const { data: serviceTypes = [] } = useApiServiceTypes();
   const { data: instructors = [] } = useApiInstructors();
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
-  const [selectedDate, setSelectedDate] = useState(today);
+  const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
-  const [viewTab, setViewTab] = useState<"schedule" | "reservations">("schedule");
+  const [viewTab, setViewTab] = useState<"schedule" | "reservations" | "calendar">("schedule");
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
 
+  const calendarMonthStart = useMemo(() => startOfMonth(calendarMonth), [calendarMonth]);
+  const calendarMonthEnd = useMemo(() => endOfMonth(calendarMonth), [calendarMonth]);
+
   // Fetch schedules for the selected date
-  const { data: allSchedules = [], isLoading: schedulesLoading } = useApiSchedules({ date: selectedDate });
+  const scheduleFilters = useMemo(() => {
+    if (viewTab === "calendar") {
+      return { from_date: format(calendarMonthStart, "yyyy-MM-dd") };
+    }
+    return selectedDate ? { date: selectedDate } : undefined;
+  }, [viewTab, selectedDate, calendarMonthStart]);
+
+  const { data: allSchedules = [], isLoading: schedulesLoading } = useApiSchedules(
+    scheduleFilters
+  );
 
   const filteredSchedules = useMemo(() => {
     return allSchedules.filter((s) => {
@@ -67,6 +80,38 @@ const ClassesPage = () => {
     });
   }, [allSchedules, statusFilter, typeFilter]);
 
+  const calendarSchedules = useMemo(() => {
+    if (viewTab !== "calendar") return [];
+    return filteredSchedules.filter((s) => {
+      const d = parseISO(s.class_date);
+      return d >= calendarMonthStart && d <= calendarMonthEnd;
+    });
+  }, [viewTab, filteredSchedules, calendarMonthStart, calendarMonthEnd]);
+
+  const calendarDays = useMemo(() => {
+    const start = startOfWeek(calendarMonthStart, { weekStartsOn: 1 });
+    const end = endOfWeek(calendarMonthEnd, { weekStartsOn: 1 });
+    const days: Date[] = [];
+    let current = start;
+
+    while (current <= end) {
+      days.push(current);
+      current = addDays(current, 1);
+    }
+
+    return days;
+  }, [calendarMonthStart, calendarMonthEnd]);
+
+  const schedulesByDate = useMemo(() => {
+    const map = new Map<string, ApiSchedule[]>();
+    for (const s of calendarSchedules) {
+      const key = s.class_date.split("T")[0];
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(s);
+    }
+    return map;
+  }, [calendarSchedules]);
+
   // Fetch detail (with bookings) for selected class
   const { data: scheduleDetail } = useApiScheduleDetail(selectedClassId);
   const selectedClass = scheduleDetail?.schedule ?? null;
@@ -75,6 +120,7 @@ const ClassesPage = () => {
   const createSchedule = useCreateSchedule();
   const updateSchedule = useUpdateSchedule();
   const deleteSchedule = useDeleteSchedule();
+  const updateBookingAttendance = useUpdateBookingAttendance();
 
   // Add slot dialog
   const [showAddSlot, setShowAddSlot] = useState(false);
@@ -111,7 +157,7 @@ const ClassesPage = () => {
 
   // ─── Add Slot ──
   const openAddSlot = () => {
-    setSlotForm({ ...emptySlotForm, date: selectedDate, serviceTypeId: serviceTypes[0]?.id || "" });
+    setSlotForm({ ...emptySlotForm, date: selectedDate || today, serviceTypeId: serviceTypes[0]?.id || "" });
     setShowAddSlot(true);
   };
 
@@ -127,10 +173,12 @@ const ClassesPage = () => {
         max_capacity: parseInt(slotForm.capacity) || 10,
         location_note: slotForm.locationNote || undefined,
       });
+      // Switch the table filter to the created date so the new session is visible immediately.
+      setSelectedDate(slotForm.date);
       setShowAddSlot(false);
       toast.success("Class timeslot added");
     } catch (err: any) {
-      toast.error(err?.message || "Failed to add timeslot");
+      toast.error(err?.body?.message || err?.message || "Failed to add timeslot");
     }
   };
 
@@ -168,6 +216,23 @@ const ClassesPage = () => {
       toast.success("Timeslot updated");
     } catch (err: any) {
       toast.error(err?.message || "Failed to update timeslot");
+    }
+  };
+
+  const handleAttendanceUpdate = async (
+    bookingId: string,
+    status: "confirmed" | "attended" | "no_show"
+  ) => {
+    if (!selectedClass) return;
+    try {
+      await updateBookingAttendance.mutateAsync({
+        scheduleId: selectedClass.id,
+        bookingId,
+        status,
+      });
+      toast.success("Attendance updated");
+    } catch (err: any) {
+      toast.error(err?.body?.message || err?.message || "Failed to update attendance");
     }
   };
 
@@ -228,7 +293,7 @@ const ClassesPage = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex gap-1.5">
-            {(["schedule", "reservations"] as const).map((tab) => (
+            {(["schedule", "reservations", "calendar"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setViewTab(tab)}
@@ -239,7 +304,7 @@ const ClassesPage = () => {
                     : "bg-card text-muted-foreground border-border hover:bg-muted"
                 )}
               >
-                {tab === "schedule" ? "Class Schedule" : "Bookings"}
+                {tab === "schedule" ? "Class Schedule" : tab === "reservations" ? "Bookings" : "Calendar"}
               </button>
             ))}
           </div>
@@ -281,18 +346,28 @@ const ClassesPage = () => {
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2 h-9 px-4 font-medium border-border hover:border-primary/50 transition-colors">
                 <Calendar className="h-4 w-4 text-primary" />
-                {format(new Date(selectedDate), "EEEE, MMM d, yyyy")}
+                {selectedDate ? format(new Date(selectedDate), "EEEE, MMM d, yyyy") : "All dates"}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">
               <CalendarComponent
                 mode="single"
-                selected={new Date(selectedDate)}
+                selected={selectedDate ? new Date(selectedDate) : undefined}
                 onSelect={(d) => d && setSelectedDate(format(d, "yyyy-MM-dd"))}
                 initialFocus
               />
             </PopoverContent>
           </Popover>
+          {selectedDate && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 px-3"
+              onClick={() => setSelectedDate(undefined)}
+            >
+              All
+            </Button>
+          )}
         </div>
       </div>
 
@@ -310,7 +385,6 @@ const ClassesPage = () => {
             </thead>
             <tbody className="divide-y divide-border">
               {filteredSchedules.map((cls) => {
-                const isFull = cls.status === "full";
                 const isCancelled = cls.status === "cancelled";
                 return (
                   <tr key={cls.id} className={cn("group hover:bg-muted/30 transition-colors", isCancelled && "opacity-60")}>
@@ -372,6 +446,75 @@ const ClassesPage = () => {
               )}
             </tbody>
           </table>
+        </div>
+      ) : viewTab === "calendar" ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCalendarMonth((m) => subMonths(m, 1))}>Prev</Button>
+              <Button variant="outline" size="sm" onClick={() => setCalendarMonth(new Date())}>Today</Button>
+              <Button variant="outline" size="sm" onClick={() => setCalendarMonth((m) => addMonths(m, 1))}>Next</Button>
+            </div>
+            <div className="text-sm font-semibold text-foreground">{format(calendarMonthStart, "MMMM yyyy")}</div>
+          </div>
+          <p className="text-xs text-muted-foreground px-1">Click a day to open the schedule list for that date. Click a session card to open details.</p>
+
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="grid grid-cols-7 border-b border-border bg-muted/30">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                <div key={d} className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{d}</div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7">
+              {calendarDays.map((day) => {
+                const dayKey = format(day, "yyyy-MM-dd");
+                const daySchedules = schedulesByDate.get(dayKey) ?? [];
+                const inMonth = isSameMonth(day, calendarMonthStart);
+
+                return (
+                  <button
+                    key={dayKey}
+                    className={cn(
+                      "min-h-[140px] border-r border-b border-border p-2 text-left align-top transition-colors",
+                      "hover:bg-muted/20",
+                      !inMonth && "bg-muted/10 text-muted-foreground/60"
+                    )}
+                    onClick={() => {
+                      setSelectedDate(dayKey);
+                      setViewTab("schedule");
+                    }}
+                  >
+                    <div className={cn(
+                      "mb-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
+                      isSameDay(day, new Date()) && "bg-primary text-primary-foreground"
+                    )}>
+                      {format(day, "d")}
+                    </div>
+
+                    <div className="space-y-1">
+                      {daySchedules.slice(0, 3).map((s) => (
+                        <div
+                          key={s.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedClassId(s.id);
+                          }}
+                          className="rounded-md border border-border bg-background px-2 py-1 text-[10px] leading-tight"
+                        >
+                          <div className="font-semibold text-foreground truncate">{s.service_type?.name ?? "Class"}</div>
+                          <div className="text-muted-foreground">{s.start_time.slice(0, 5)}-{s.end_time.slice(0, 5)}</div>
+                        </div>
+                      ))}
+                      {daySchedules.length > 3 && (
+                        <div className="text-[10px] font-medium text-primary">+{daySchedules.length - 3} more</div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       ) : (
         /* Bookings view — show all bookings for schedules on this date */
@@ -460,9 +603,44 @@ const ClassesPage = () => {
                           return (
                             <div key={r.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
                               <span className="text-sm text-foreground">{name}</span>
-                              <span className={cn("text-xs font-semibold capitalize", bookingStatusConfig[r.status]?.className)}>
-                                {r.status.replace("_", " ")}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={cn("text-xs font-semibold capitalize", bookingStatusConfig[r.status]?.className)}>
+                                  {r.status.replace("_", " ")}
+                                </span>
+                                {r.status === "confirmed" && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 px-2 text-[10px]"
+                                      disabled={updateBookingAttendance.isPending}
+                                      onClick={() => handleAttendanceUpdate(r.id, "attended")}
+                                    >
+                                      Attended
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 px-2 text-[10px]"
+                                      disabled={updateBookingAttendance.isPending}
+                                      onClick={() => handleAttendanceUpdate(r.id, "no_show")}
+                                    >
+                                      No-show
+                                    </Button>
+                                  </>
+                                )}
+                                {r.status === "attended" && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 text-[10px]"
+                                    disabled={updateBookingAttendance.isPending}
+                                    onClick={() => handleAttendanceUpdate(r.id, "confirmed")}
+                                  >
+                                    Undo
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           );
                         })}
@@ -483,9 +661,22 @@ const ClassesPage = () => {
                           return (
                             <div key={r.id} className="flex items-center justify-between rounded-lg bg-muted/20 px-3 py-2 opacity-60">
                               <span className="text-sm text-foreground">{name}</span>
-                              <div className={cn("flex items-center gap-1 text-xs font-semibold capitalize", bookingStatusConfig[r.status]?.className)}>
-                                <StatusIcon className="h-3 w-3" />
-                                {r.status.replace("_", " ")}
+                              <div className="flex items-center gap-2">
+                                <div className={cn("flex items-center gap-1 text-xs font-semibold capitalize", bookingStatusConfig[r.status]?.className)}>
+                                  <StatusIcon className="h-3 w-3" />
+                                  {r.status.replace("_", " ")}
+                                </div>
+                                {r.status === "no_show" && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 text-[10px]"
+                                    disabled={updateBookingAttendance.isPending}
+                                    onClick={() => handleAttendanceUpdate(r.id, "attended")}
+                                  >
+                                    Mark Attended
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           );
@@ -529,7 +720,25 @@ const ClassesPage = () => {
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={editForm.date} onChange={(e) => setEditForm(f => ({ ...f, date: e.target.value }))} /></div>
+              <div className="space-y-1.5">
+                <Label>Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {editForm.date ? format(new Date(editForm.date), "yyyy-MM-dd") : "Pick date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={editForm.date ? new Date(editForm.date) : undefined}
+                      onSelect={(d) => d && setEditForm(f => ({ ...f, date: format(d, "yyyy-MM-dd") }))}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
               <div className="space-y-1.5"><Label>Start</Label><Input type="time" value={editForm.startTime} onChange={(e) => setEditForm(f => ({ ...f, startTime: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>End</Label><Input type="time" value={editForm.endTime} onChange={(e) => setEditForm(f => ({ ...f, endTime: e.target.value }))} /></div>
             </div>
@@ -583,7 +792,25 @@ const ClassesPage = () => {
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={slotForm.date} onChange={(e) => setSlotForm(f => ({ ...f, date: e.target.value }))} /></div>
+              <div className="space-y-1.5">
+                <Label>Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {slotForm.date ? format(new Date(slotForm.date), "yyyy-MM-dd") : "Pick date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={slotForm.date ? new Date(slotForm.date) : undefined}
+                      onSelect={(d) => d && setSlotForm(f => ({ ...f, date: format(d, "yyyy-MM-dd") }))}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
               <div className="space-y-1.5"><Label>Start</Label><Input type="time" value={slotForm.startTime} onChange={(e) => setSlotForm(f => ({ ...f, startTime: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>End</Label><Input type="time" value={slotForm.endTime} onChange={(e) => setSlotForm(f => ({ ...f, endTime: e.target.value }))} /></div>
             </div>

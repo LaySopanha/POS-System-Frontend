@@ -62,10 +62,16 @@ const ZenHome = () => {
     selectedSlots,
     handleSelectTime,
     handleCompleteBooking,
+    isBookingLoading,
     sessionsRemaining,
+    sessionsByType,
+    membershipCreditsByPackage,
     allowedClassTypes,
     canReschedule,
     handleCancelBooking,
+    handleStartReschedule,
+    isRescheduleMode,
+    handleCancelRescheduleMode,
     goBack,
     requireAuth,
     navigate,
@@ -148,9 +154,11 @@ const ZenHome = () => {
             selectedSlots={selectedSlots}
             handleSelectTime={handleSelectTime}
             handleCompleteBooking={handleCompleteBooking}
+            isBookingLoading={isBookingLoading}
             customer={customer}
             sessionsRemaining={sessionsRemaining}
             selectedClassType={selectedClassType}
+            bookedClasses={bookedClasses}
           />
         )}
 
@@ -178,6 +186,9 @@ const ZenHome = () => {
             setAccountTab={setAccountTab}
             canReschedule={canReschedule}
             handleCancelBooking={handleCancelBooking}
+            handleStartReschedule={handleStartReschedule}
+            isRescheduleMode={isRescheduleMode}
+            handleCancelRescheduleMode={handleCancelRescheduleMode}
             // For the new Book a Class tab
             selectedClassType={selectedClassType}
             setSelectedClassType={setSelectedClassType}
@@ -188,6 +199,8 @@ const ZenHome = () => {
             handleSelectTime={handleSelectTime}
             handleCompleteBooking={handleCompleteBooking}
             sessionsRemaining={sessionsRemaining}
+            sessionsByType={sessionsByType}
+            membershipCreditsByPackage={membershipCreditsByPackage}
             allowedClassTypes={allowedClassTypes}
             loyaltyData={loyaltyData}
             statsData={statsData}

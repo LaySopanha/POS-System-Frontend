@@ -38,6 +38,7 @@ export interface PurchasedPackage {
 
 export interface BookedClass {
     id: string;
+    scheduleId: string;
     className: string;
     classTypeId: string;
     date: string;

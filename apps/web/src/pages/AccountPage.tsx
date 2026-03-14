@@ -5,7 +5,7 @@ import {
     LayoutDashboard, TrendingUp, CreditCard,
     ChevronRight, Calendar, Clock, MapPin, CheckCircle2,
     AlertCircle, Trophy, Star, ShieldCheck,
-    Globe, FileText, Edit3, Save, X
+    Globe, FileText, Edit3, Save, X, DownloadCloud, KeyRound, Loader2
 } from "lucide-react";
 import { cn } from "@repo/ui";
 import { toast } from "@repo/ui";
@@ -13,6 +13,7 @@ import { classTypes } from "@repo/store";
 import { AccountTab, PurchasedPackage, BookedClass, PaymentRecord } from "@/types/zen-portal.ts";
 import type { LoyaltyInfo, CustomerStats } from "@/hooks/use-customer-api";
 import { useUpdateProfile } from "@/hooks/use-customer-api";
+import { useAuth } from "@/hooks/use-auth";
 
 interface AccountPageProps {
     customer: any;
@@ -24,7 +25,10 @@ interface AccountPageProps {
     accountTab: AccountTab;
     setAccountTab: (tab: AccountTab) => void;
     canReschedule: (booking: BookedClass) => boolean;
-    handleCancelBooking: (id: string) => void;
+    handleCancelBooking: (id: string) => Promise<void>;
+    handleStartReschedule: (id: string) => Promise<void>;
+    isRescheduleMode: boolean;
+    handleCancelRescheduleMode: () => void;
     // New scheduling props
     selectedClassType: any;
     setSelectedClassType: (ct: any) => void;
@@ -35,6 +39,8 @@ interface AccountPageProps {
     handleSelectTime: (slot: any) => void;
     handleCompleteBooking: () => void;
     sessionsRemaining: number;
+    sessionsByType: Record<string, number>;
+    membershipCreditsByPackage: Record<string, { classRemaining: number; recoveryRemaining: number }>;
     allowedClassTypes: string[];
     loyaltyData?: LoyaltyInfo;
     statsData?: CustomerStats;
@@ -51,6 +57,9 @@ const AccountPage: React.FC<AccountPageProps> = ({
     setAccountTab,
     canReschedule,
     handleCancelBooking,
+    handleStartReschedule,
+    isRescheduleMode,
+    handleCancelRescheduleMode,
     selectedClassType,
     setSelectedClassType,
     selectedDate,
@@ -60,12 +69,16 @@ const AccountPage: React.FC<AccountPageProps> = ({
     handleSelectTime,
     handleCompleteBooking,
     sessionsRemaining: totalSessionsRemaining,
+    sessionsByType,
+    membershipCreditsByPackage,
     allowedClassTypes,
     loyaltyData,
     statsData,
 }) => {
     const { t, i18n } = useTranslation();
     const [expandedBookingId, setExpandedBookingId] = React.useState<string | null>(null);
+    const [bookingActionLoading, setBookingActionLoading] = React.useState<{ id: string; action: "cancel" | "reschedule" } | null>(null);
+    const [pendingBookingAction, setPendingBookingAction] = React.useState<{ action: "cancel" | "reschedule"; booking: BookedClass } | null>(null);
     // Profile editing state
     const [isEditingProfile, setIsEditingProfile] = React.useState(false);
     const [profileForm, setProfileForm] = React.useState<{
@@ -82,25 +95,46 @@ const AccountPage: React.FC<AccountPageProps> = ({
             : 'email') as 'email' | 'telegram' | 'instagram',
     });
     const updateProfile = useUpdateProfile();
+    const { updatePassword } = useAuth();
+    const [isChangingPassword, setIsChangingPassword] = React.useState(false);
+    const [passwordForm, setPasswordForm] = React.useState({
+        newPassword: '',
+        confirmPassword: ''
+    });
+    const [isPasswordUpdating, setIsPasswordUpdating] = React.useState(false);
 
     const activePkgs = purchasedPackages.filter(p =>
         (p.status === "active" || p.status === "inactive" || p.status === "not_started") && p.sessionsUsed < p.sessions
     );
     const pastPkgs = purchasedPackages.filter(p => p.status === "expired" || p.sessionsUsed >= p.sessions);
     const now = new Date();
+
+    const getBookingStartDate = (booking: BookedClass): Date | null => {
+        const startTime = booking.time.split(" – ")[0]?.trim();
+        if (!booking.date || !startTime) return null;
+
+        const date = new Date(`${booking.date}T${startTime}`);
+        return Number.isNaN(date.getTime()) ? null : date;
+    };
+
     const upcomingBookings = bookedClasses.filter(b => {
         if (b.status !== "confirmed") return false;
-        // Basic date check for filter
-        const bDate = new Date(`${b.date}T${b.time}`);
-        return bDate >= now;
+        const bDate = getBookingStartDate(b);
+        return bDate ? bDate >= now : true;
     }).sort((a, b) => a.date.localeCompare(b.date));
 
     const previousBookings = bookedClasses.filter(b => {
         if (b.status === "confirmed") {
-            const bDate = new Date(`${b.date}T${b.time}`);
-            return bDate < now;
+            const bDate = getBookingStartDate(b);
+            return bDate ? bDate < now : false;
         }
-        return b.status === "completed" || b.status === "late-cancel" || b.status === "no-show" || b.status === "cancelled";
+        return b.status === "completed"
+            || b.status === "attended"
+            || b.status === "late-cancel"
+            || b.status === "no-show"
+            || b.status === "no_show"
+            || b.status === "cancelled"
+            || b.status === "rescheduled";
     }).sort((a, b) => b.date.localeCompare(a.date));
 
     // Derive isMembershipMember for UI conditional messages
@@ -116,6 +150,45 @@ const AccountPage: React.FC<AccountPageProps> = ({
             day: 'numeric',
             year: 'numeric'
         });
+    };
+
+    const isBookingActionLoading = (bookingId: string, action?: "cancel" | "reschedule") => {
+        if (!bookingActionLoading || bookingActionLoading.id !== bookingId) return false;
+        return action ? bookingActionLoading.action === action : true;
+    };
+
+    const formatSessionTypeLabel = (type: string) => {
+        if (type === "membership-classes") return "Membership Class Credits";
+        if (type === "membership-recovery") return "Membership Recovery Passes";
+        return type.replace(/-/g, " ");
+    };
+
+    const openCancelConfirm = (booking: BookedClass) => {
+        setPendingBookingAction({ action: "cancel", booking });
+    };
+
+    const openRescheduleConfirm = (booking: BookedClass) => {
+        setPendingBookingAction({ action: "reschedule", booking });
+    };
+
+    const confirmBookingAction = async () => {
+        if (!pendingBookingAction) return;
+
+        const { action, booking } = pendingBookingAction;
+        setBookingActionLoading({ id: booking.id, action });
+        try {
+            if (action === "reschedule") {
+                await handleStartReschedule(booking.id);
+                setSelectedClassType(classTypes.find(ct => ct.id === booking.classTypeId) || null);
+                setAccountTab("book");
+            } else {
+                await handleCancelBooking(booking.id);
+            }
+
+            setPendingBookingAction(null);
+        } finally {
+            setBookingActionLoading(null);
+        }
     };
 
     // Stats for Dashboard & Progress
@@ -377,6 +450,12 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                             <div className="text-right">
                                                 <p className="text-4xl font-black text-foreground">{pkg.sessions - pkg.sessionsUsed}</p>
                                                 <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{t('sessions_remaining')}</p>
+                                                {pkg.classTypeId === "membership" && membershipCreditsByPackage[pkg.id] && (
+                                                    <div className="mt-3 space-y-1 text-left">
+                                                        <p className="text-[9px] font-black text-primary uppercase tracking-wider">Class credits left: {membershipCreditsByPackage[pkg.id].classRemaining}</p>
+                                                        <p className="text-[9px] font-black text-matcha uppercase tracking-wider">Recovery passes left: {membershipCreditsByPackage[pkg.id].recoveryRemaining}</p>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
@@ -405,6 +484,12 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                             <div className="bg-muted/30 rounded-3xl p-6">
                                                 <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-4 px-1">{t('your_benefits')}</p>
                                                 <div className="flex flex-wrap gap-2">
+                                                    {pkg.classTypeId === "membership" && membershipCreditsByPackage[pkg.id] && (
+                                                        <>
+                                                            <span className="text-[10px] bg-card border border-primary/30 rounded-xl px-3 py-1.5 font-bold text-primary">Class credits left: {membershipCreditsByPackage[pkg.id].classRemaining}</span>
+                                                            <span className="text-[10px] bg-card border border-matcha/30 rounded-xl px-3 py-1.5 font-bold text-matcha">Recovery passes left: {membershipCreditsByPackage[pkg.id].recoveryRemaining}</span>
+                                                        </>
+                                                    )}
                                                     {pkg.benefits?.map((benefit, i) => (
                                                         <span key={i} className="text-[10px] bg-card border border-border/60 rounded-xl px-3 py-1.5 font-bold text-zen-dark/60">{benefit}</span>
                                                     ))}
@@ -518,21 +603,20 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                             {canReschedule(booking) ? (
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <button
-                                                        onClick={() => {
-                                                            // Standard reschedule practice: cancel old (freeing a session) and go book new.
-                                                            handleCancelBooking(booking.id);
-                                                            setSelectedClassType(classTypes.find(ct => ct.id === booking.classTypeId) || null);
-                                                            setAccountTab("book");
-                                                        }}
-                                                        className="rounded-xl border border-border py-3 text-[10px] font-black uppercase tracking-widest hover:bg-muted/50 transition-colors shadow-sm"
+                                                        onClick={() => openRescheduleConfirm(booking)}
+                                                        disabled={isBookingActionLoading(booking.id)}
+                                                        className="rounded-xl border border-border py-3 text-[10px] font-black uppercase tracking-widest hover:bg-muted/50 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                                                     >
-                                                        {t('reschedule')}
+                                                        {isBookingActionLoading(booking.id, "reschedule") && <Loader2 size={12} className="animate-spin" />}
+                                                        {isBookingActionLoading(booking.id, "reschedule") ? "Rescheduling..." : t('reschedule')}
                                                     </button>
                                                     <button
-                                                        onClick={() => handleCancelBooking(booking.id)}
-                                                        className="rounded-xl border border-destructive/10 bg-destructive/5 py-3 text-[10px] font-black text-destructive uppercase tracking-widest hover:bg-destructive/10 transition-colors shadow-sm"
+                                                        onClick={() => openCancelConfirm(booking)}
+                                                        disabled={isBookingActionLoading(booking.id)}
+                                                        className="rounded-xl border border-destructive/10 bg-destructive/5 py-3 text-[10px] font-black text-destructive uppercase tracking-widest hover:bg-destructive/10 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                                                     >
-                                                        {t('cancel_btn')}
+                                                        {isBookingActionLoading(booking.id, "cancel") && <Loader2 size={12} className="animate-spin" />}
+                                                        {isBookingActionLoading(booking.id, "cancel") ? "Cancelling..." : t('cancel_btn')}
                                                     </button>
                                                 </div>
                                             ) : (
@@ -621,14 +705,47 @@ const AccountPage: React.FC<AccountPageProps> = ({
                 {/* 4. BOOK A CLASS */}
                 {accountTab === "book" && (
                     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-400">
+                        {isRescheduleMode && (
+                            <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 flex items-start justify-between gap-3">
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Reschedule Mode</p>
+                                    <p className="text-[11px] text-amber-800 font-semibold leading-relaxed">
+                                        Choose a new date/time for {selectedClassType?.name || "this class"}. Only this class type is available.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleCancelRescheduleMode}
+                                    className="text-[9px] font-black text-amber-700 uppercase tracking-widest border border-amber-300 px-3 py-1.5 rounded-xl hover:bg-amber-100 transition-colors"
+                                >
+                                    Exit
+                                </button>
+                            </div>
+                        )}
+
                         <div className="flex flex-col gap-2">
                             <h2 className="text-2xl font-bold tracking-tight text-zen-dark">{t('book_a_class')}</h2>
                             <p className="text-zen-dark/60 text-sm">{totalSessionsRemaining} {t('sessions_available_to_book')}</p>
+                            {Object.keys(sessionsByType).length > 0 && (
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                    {Object.entries(sessionsByType)
+                                        .filter(([, remaining]) => remaining > 0)
+                                        .map(([type, remaining]) => (
+                                            <span
+                                                key={type}
+                                                className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20"
+                                            >
+                                                {formatSessionTypeLabel(type)}: {remaining}
+                                            </span>
+                                        ))}
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex gap-3 pb-2 overflow-x-auto no-scrollbar scroll-smooth">
                             {['reformer', 'cadillac', 'hot-pilates', 'barre', 'recovery-lounge'].map((typeId) => {
-                                const isAllowed = allowedClassTypes.includes(typeId);
+                                const isAllowedByPackage = allowedClassTypes.includes(typeId);
+                                const isLockedByReschedule = isRescheduleMode && selectedClassType?.id !== typeId;
+                                const isAllowed = isAllowedByPackage && !isLockedByReschedule;
                                 return (
                                     <button
                                         key={typeId}
@@ -649,8 +766,11 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                             <p className="font-black text-[10px] uppercase tracking-[0.1em] leading-none">
                                                 {typeId.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ')}
                                             </p>
-                                            {!isAllowed && (
+                                            {!isAllowedByPackage && (
                                                 <p className="text-[8px] font-bold text-destructive/60 uppercase mt-1 leading-none">{t('no_active_package')}</p>
+                                            )}
+                                            {isLockedByReschedule && (
+                                                <p className="text-[8px] font-bold text-amber-700 uppercase mt-1 leading-none">Reschedule target is {selectedClassType?.name}</p>
                                             )}
                                         </div>
                                     </button>
@@ -704,15 +824,18 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                         availableTimes.map((slot) => {
                                             const isSelected = selectedSlots.some(s => s.id === slot.id);
                                             const isFull = slot.isFull;
+                                            const isAlreadyBooked = bookedClasses.some(
+                                                b => b.scheduleId === slot.id && b.status === "confirmed"
+                                            );
                                             return (
                                                 <button
                                                     key={slot.id}
-                                                    disabled={isFull}
+                                                    disabled={isFull || isAlreadyBooked}
                                                     onClick={() => handleSelectTime(slot)}
                                                     className={cn(
                                                         "w-full p-5 rounded-3xl border transition-all text-left flex justify-between items-center group",
                                                         isSelected ? "bg-matcha text-white border-matcha shadow-lg" : "bg-white/40 border-white/60 text-zen-dark",
-                                                        isFull && "opacity-50 grayscale cursor-not-allowed"
+                                                        (isFull || isAlreadyBooked) && "opacity-50 grayscale cursor-not-allowed"
                                                     )}
                                                 >
                                                     <div className="space-y-1">
@@ -725,9 +848,16 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                                             {isFull ? t('fully_booked') : `${slot.enrolled}/${slot.capacity} ${t('booked')}`}
                                                         </div>
                                                     </div>
-                                                    <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-all", isSelected ? "bg-white/20" : "bg-matcha/10")}>
-                                                        {isSelected ? <CheckCircle2 className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-                                                    </div>
+                                                    {isAlreadyBooked ? (
+                                                        <div className="flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
+                                                            <CheckCircle2 className="w-3 h-3" />
+                                                            Booked
+                                                        </div>
+                                                    ) : (
+                                                        <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-all", isSelected ? "bg-white/20" : "bg-matcha/10")}>
+                                                            {isSelected ? <CheckCircle2 className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                                                        </div>
+                                                    )}
                                                 </button>
                                             );
                                         })
@@ -921,23 +1051,49 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                 <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-zen-dark/40 px-2">{t('payment_history')}</h3>
                                 {payments.length > 0 ? (
                                     <div className="space-y-3">
-                                        {payments.map((p) => (
-                                            <div key={p.id} className="bg-white/40 border border-white/60 rounded-[2rem] p-6 flex items-center justify-between group hover:bg-white/60 transition-all">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="h-12 w-12 rounded-2xl bg-matcha/10 flex items-center justify-center text-matcha">
-                                                        <FileText size={20} />
+                                        {payments.map((p) => {
+                                            const invoiceNumber = `INV-${p.id.substring(0, 6).toUpperCase()}`;
+                                            return (
+                                                <div key={p.id} className="bg-white/40 border border-white/60 rounded-[2rem] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:bg-white/60 transition-all">
+                                                    <div className="flex items-start sm:items-center gap-4">
+                                                        <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                                                            <FileText size={20} />
+                                                        </div>
+                                                        <div className="space-y-0.5">
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="text-sm font-black text-foreground">{p.items.join(', ')}</p>
+                                                                <span className={cn(
+                                                                    "text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider",
+                                                                    p.status === "paid" ? "bg-matcha/20 text-matcha" : "bg-destructive/10 text-destructive"
+                                                                )}>
+                                                                    {t(p.status)}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                                                                <span>{invoiceNumber}</span>
+                                                                <span>·</span>
+                                                                <span>{formatDateWithDay(p.date)}</span>
+                                                                <span>·</span>
+                                                                <span>{p.method}</span>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-sm font-black text-zen-dark">{p.items[0]}</p>
-                                                        <p className="text-[10px] font-bold text-zen-dark/40 uppercase tracking-widest">{p.date} · {p.method}</p>
+                                                    <div className="flex items-center justify-between sm:justify-end gap-6 sm:gap-8 pt-4 sm:pt-0 border-t sm:border-0 border-border/50">
+                                                        <div className="text-left sm:text-right">
+                                                            <p className="text-sm font-black text-muted-foreground uppercase tracking-widest">{t('total')}</p>
+                                                            <p className="text-lg font-black text-foreground">${p.amount.toFixed(2)}</p>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => toast.success("Receipt downloaded!")}
+                                                            className="flex items-center gap-2 px-4 py-2 bg-background border border-border hover:border-primary/30 rounded-xl text-xs font-bold text-zen-dark transition-all hover:bg-muted/50"
+                                                        >
+                                                            <DownloadCloud size={14} className="text-primary" />
+                                                            Receipt
+                                                        </button>
                                                     </div>
                                                 </div>
-                                                <div className="text-right">
-                                                    <p className="text-base font-black text-zen-dark">${p.amount}</p>
-                                                    <p className="text-[9px] font-black text-matcha uppercase tracking-tight">{t('paid')}</p>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 ) : (
                                     <div className="p-8 text-center bg-white/20 rounded-3xl border border-dashed border-white/40">
@@ -1083,10 +1239,136 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                     ))}
                                 </div>
                             </div>
+
+                            {/* Change Password Section */}
+                            <div className="bg-card border border-border rounded-[2.5rem] p-8 space-y-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-10 w-10 rounded-2xl bg-destructive/10 flex items-center justify-center text-destructive">
+                                        <KeyRound size={20} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="text-sm font-bold text-zen-dark">{t('security') || 'Security'}</h4>
+                                        <p className="text-[10px] text-zen-dark/40 uppercase font-black tracking-widest">{t('update_your_password') || 'Update your password'}</p>
+                                    </div>
+                                </div>
+                                
+                                {isChangingPassword ? (
+                                    <div className="space-y-4 pt-2">
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest px-1">{t('new_password') || 'New Password'}</p>
+                                            <input
+                                                type="password"
+                                                value={passwordForm.newPassword}
+                                                onChange={(e) => setPasswordForm(f => ({ ...f, newPassword: e.target.value }))}
+                                                className="w-full rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm font-bold text-foreground focus:outline-none focus:border-primary focus:ring-0 transition-colors"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest px-1">{t('confirm_password') || 'Confirm Password'}</p>
+                                            <input
+                                                type="password"
+                                                value={passwordForm.confirmPassword}
+                                                onChange={(e) => setPasswordForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                                                className="w-full rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm font-bold text-foreground focus:outline-none focus:border-primary focus:ring-0 transition-colors"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 pt-2">
+                                            <button
+                                                onClick={() => {
+                                                    setIsChangingPassword(false);
+                                                    setPasswordForm({ newPassword: '', confirmPassword: '' });
+                                                }}
+                                                className="flex items-center justify-center gap-2 py-3 rounded-2xl border border-border text-[10px] font-black text-muted-foreground uppercase tracking-widest hover:bg-muted/40 transition-colors"
+                                            >
+                                                <X size={13} /> Cancel
+                                            </button>
+                                            <button
+                                                disabled={isPasswordUpdating || !passwordForm.newPassword}
+                                                onClick={async () => {
+                                                    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+                                                        toast.error("Passwords do not match");
+                                                        return;
+                                                    }
+                                                    if (passwordForm.newPassword.length < 6) {
+                                                        toast.error("Password must be at least 6 characters");
+                                                        return;
+                                                    }
+                                                    setIsPasswordUpdating(true);
+                                                    const res = await updatePassword(passwordForm.newPassword);
+                                                    if (res.success) {
+                                                        toast.success("Password updated successfully");
+                                                        setIsChangingPassword(false);
+                                                        setPasswordForm({ newPassword: '', confirmPassword: '' });
+                                                    } else {
+                                                        toast.error(res.error || "Failed to update password");
+                                                    }
+                                                    setIsPasswordUpdating(false);
+                                                }}
+                                                className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-destructive text-destructive-foreground text-[10px] font-black uppercase tracking-widest shadow-md disabled:opacity-60 transition-opacity"
+                                            >
+                                                <Save size={13} /> {isPasswordUpdating ? 'Updating...' : 'Update Password'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button 
+                                        onClick={() => setIsChangingPassword(true)}
+                                        className="w-full py-4 rounded-[1.5rem] border border-border flex items-center justify-center gap-2 text-sm font-bold text-muted-foreground hover:bg-muted/20 hover:text-foreground hover:border-primary/30 transition-all active:scale-[0.98]"
+                                    >
+                                        Change Password
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     )
                 }
             </div>
+
+            {pendingBookingAction && (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm px-4 pb-4 sm:pb-0">
+                    <div className="w-full max-w-md rounded-[1.8rem] border border-border bg-card shadow-2xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-200">
+                        <div className="space-y-3">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                {pendingBookingAction.action === "reschedule" ? "Confirm reschedule" : "Confirm cancellation"}
+                            </p>
+                            <h3 className="text-lg font-black text-foreground leading-tight">
+                                {pendingBookingAction.action === "reschedule"
+                                    ? "Reschedule this booking?"
+                                    : "Cancel this booking?"}
+                            </h3>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                                {pendingBookingAction.action === "reschedule"
+                                    ? "You will be redirected to Book a Class to choose a new slot. Your current booking stays active until the new slot is confirmed."
+                                    : "This will release your slot and restore the session to your package if policy allows."}
+                            </p>
+                            <div className="rounded-xl bg-muted/30 border border-border/60 p-3">
+                                <p className="text-[10px] font-bold text-foreground uppercase tracking-wide">{pendingBookingAction.booking.className}</p>
+                                <p className="text-[10px] text-muted-foreground font-medium mt-1">{formatDateWithDay(pendingBookingAction.booking.date)} · {pendingBookingAction.booking.time}</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 mt-5">
+                            <button
+                                onClick={() => setPendingBookingAction(null)}
+                                disabled={isBookingActionLoading(pendingBookingAction.booking.id)}
+                                className="py-3 rounded-xl border border-border text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-muted/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Keep Booking
+                            </button>
+                            <button
+                                onClick={confirmBookingAction}
+                                disabled={isBookingActionLoading(pendingBookingAction.booking.id)}
+                                className="py-3 rounded-xl bg-destructive text-destructive-foreground text-[10px] font-black uppercase tracking-widest shadow-sm disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                            >
+                                {isBookingActionLoading(pendingBookingAction.booking.id, pendingBookingAction.action) && <Loader2 size={12} className="animate-spin" />}
+                                {pendingBookingAction.action === "reschedule"
+                                    ? (isBookingActionLoading(pendingBookingAction.booking.id, "reschedule") ? "Rescheduling..." : "Yes, Reschedule")
+                                    : (isBookingActionLoading(pendingBookingAction.booking.id, "cancel") ? "Cancelling..." : "Yes, Cancel")}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

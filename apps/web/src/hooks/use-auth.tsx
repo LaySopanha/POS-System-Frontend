@@ -43,6 +43,7 @@ interface AuthContextValue extends AuthState {
         password: string
     ) => Promise<{ success: boolean; error?: string }>;
     signOut: () => Promise<void>;
+    updatePassword: (password: string) => Promise<{ success: boolean; error?: string }>;
     refreshProfile: () => Promise<void>;
 }
 
@@ -194,11 +195,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
         lastUserIdRef.current = null;
     }, []);
 
+    // ── Update Password ──
+    const handleUpdatePassword = useCallback(
+        async (password: string): Promise<{ success: boolean; error?: string }> => {
+            try {
+                const { error } = await supabase.auth.updateUser({ password });
+                if (error) return { success: false, error: friendlyError(error.message) };
+                return { success: true };
+            } catch {
+                return { success: false, error: "Unable to update password." };
+            }
+        },
+        []
+    );
+
     const value: AuthContextValue = {
         ...state,
         signUp: handleSignUp,
         signIn: handleSignIn,
         signOut: handleSignOut,
+        updatePassword: handleUpdatePassword,
         refreshProfile: fetchProfile,
     };
 

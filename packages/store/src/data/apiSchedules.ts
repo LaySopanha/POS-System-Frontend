@@ -151,3 +151,26 @@ export function useDeleteSchedule() {
         onSuccess: () => qc.invalidateQueries({ queryKey: scheduleQueryKeys.all }),
     });
 }
+
+export function useUpdateBookingAttendance() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({
+            scheduleId,
+            bookingId,
+            status,
+        }: {
+            scheduleId: string;
+            bookingId: string;
+            status: "confirmed" | "attended" | "no_show";
+        }) =>
+            api.put<{ message: string }>(
+                `/admin/wellness/schedules/${scheduleId}/bookings/${bookingId}/attendance`,
+                { status }
+            ),
+        onSuccess: (_data, vars) => {
+            qc.invalidateQueries({ queryKey: scheduleQueryKeys.all });
+            qc.invalidateQueries({ queryKey: scheduleQueryKeys.detail(vars.scheduleId) });
+        },
+    });
+}

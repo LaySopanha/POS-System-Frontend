@@ -15,6 +15,7 @@ import {
     usePurchasePackage,
     useBookClass,
     useCancelBooking,
+    useRescheduleBooking,
 } from "./use-customer-api";
 import type { UserPackage, WellnessBooking, ApiPaymentRecord } from "./use-customer-api";
 import {
@@ -76,6 +77,7 @@ export const useZenPortal = () => {
     const purchaseMutation = usePurchasePackage();
     const bookClassMutation = useBookClass();
     const cancelBookingMutation = useCancelBooking();
+    const rescheduleBookingMutation = useRescheduleBooking();
 
     // Fallback to in-memory store data for class packages (used for pricing display)
     // Hardcoded store arrays (fallback)
@@ -96,6 +98,7 @@ export const useZenPortal = () => {
     const [selectedSlots, setSelectedSlots] = useState<any[]>([]);
     const [accountTab, setAccountTab] = useState<AccountTab>("dashboard");
     const [postAuthPath, setPostAuthPath] = useState<string | null>(null);
+    const [rescheduleFromBookingId, setRescheduleFromBookingId] = useState<string | null>(null);
 
     // Persistence Effects
     useEffect(() => {
@@ -111,6 +114,63 @@ export const useZenPortal = () => {
     const [showCart, setShowCart] = useState(false);
     const [cart, setCart] = useState<(ClassPackage | MembershipPlan)[]>([]);
     const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null);
+
+    const normalizeClassType = (value?: string | null): string => {
+        if (!value) return "";
+        const raw = value.toLowerCase().trim();
+        const compact = raw.replace(/[_\s]+/g, "-");
+
+        if (compact === "bare") return "barre";
+        if (compact.includes("barre") || compact.includes("bare")) return "barre";
+        if (compact.includes("intro")) return "reformer";
+        if (compact.includes("recovery")) return "recovery-lounge";
+        if (compact.includes("hot")) return "hot-pilates";
+        if (compact.includes("reformer")) return "reformer";
+        if (compact.includes("cadillac")) return "cadillac";
+        if (compact.includes("membership")) return "membership";
+
+        return compact;
+    };
+
+    const parseMembershipBenefitCredits = (benefits: unknown, key: "class" | "recovery"): number => {
+        if (!Array.isArray(benefits)) return 0;
+
+        const regex = key === "class"
+            ? /(\d+)\s*classes?/i
+            : /(\d+)\s*recovery/i;
+
+        for (const item of benefits) {
+            if (typeof item !== "string") continue;
+            const match = item.match(regex);
+            if (match) return Number(match[1] || 0);
+        }
+
+        return 0;
+    };
+
+    const bookingUsageByPackage = useMemo(() => {
+        const usage: Record<string, { total: number; class: number; recovery: number }> = {};
+        if (!apiBookings) return usage;
+
+        for (const booking of apiBookings) {
+            if (!booking?.user_package_id) continue;
+            if (booking.status === "cancelled" || booking.status === "rescheduled") continue;
+
+            const packageId = booking.user_package_id;
+            const typeId = normalizeClassType(booking.schedule?.service_type?.id || booking.schedule?.service_type?.name);
+            const isRecovery = typeId === "recovery-lounge";
+
+            if (!usage[packageId]) {
+                usage[packageId] = { total: 0, class: 0, recovery: 0 };
+            }
+
+            usage[packageId].total += 1;
+            if (isRecovery) usage[packageId].recovery += 1;
+            else usage[packageId].class += 1;
+        }
+
+        return usage;
+    }, [apiBookings]);
 
     // ─── Auth State (derived from Supabase) ──────────────────────────────────
     const customer: CustomerAccount | null = useMemo(() => {
@@ -156,23 +216,28 @@ export const useZenPortal = () => {
     const purchasedPackages: PurchasedPackage[] = useMemo(() => {
         if (!apiPackages || !apiServiceTypes) return [];
         return apiPackages.map((up: UserPackage) => {
-            const stName = up.package?.service_type?.name?.toLowerCase() || "";
-            let classTypeId: string | undefined = up.package?.service_type?.id;
+            const packageType = (up.package?.package_type || "").toLowerCase();
+            const serviceTypeName = normalizeClassType(up.package?.service_type?.name);
+            const isMembershipPackage = packageType.includes("membership") || serviceTypeName === "membership";
+            const usage = bookingUsageByPackage[up.id] || { total: 0, class: 0, recovery: 0 };
 
-            if (up.package?.package_type === "membership") {
-                classTypeId = "membership";
-            } else if (stName.includes("reformer")) {
-                classTypeId = "reformer";
-            } else if (stName.includes("cadillac")) {
-                classTypeId = "cadillac";
-            } else if (stName.includes("hot")) {
-                classTypeId = "hot-pilates";
-            } else if (stName.includes("barre")) {
-                classTypeId = "barre";
-            } else if (stName.includes("recovery")) {
-                classTypeId = "recovery-lounge";
+            let includedSessions = up.package?.sessions_included ?? up.sessions_remaining ?? 0;
+            let remainingSessions = up.sessions_remaining ?? includedSessions;
+
+            let classTypeId: string | undefined = normalizeClassType(up.package?.service_type?.id);
+
+            if (isMembershipPackage) {
+                classTypeId = "membership"; // Special flag for UI logic
+
+                const classCredits = parseMembershipBenefitCredits(up.package?.benefits, "class") || (up.package?.sessions_included ?? 0);
+                const recoveryCredits = parseMembershipBenefitCredits(up.package?.benefits, "recovery");
+                const classRemaining = Math.max(0, classCredits - usage.class);
+                const recoveryRemaining = Math.max(0, recoveryCredits - usage.recovery);
+
+                includedSessions = classCredits + recoveryCredits;
+                remainingSessions = classRemaining + recoveryRemaining;
             } else if (up.package?.service_type?.name) {
-                classTypeId = up.package.service_type.name; // Use raw name as fallback instead of UUID
+                classTypeId = normalizeClassType(up.package.service_type.name);
             }
 
             return {
@@ -180,24 +245,45 @@ export const useZenPortal = () => {
                 packageName: up.package?.name || "Package",
                 classTypeId,
                 price: parseFloat(up.package?.price || "0"),
-            sessions: up.package?.sessions_included || 0,
-            sessionsUsed: up.package?.sessions_included
-                ? (up.package.sessions_included - (up.sessions_remaining ?? 0))
-                : 0,
+            sessions: includedSessions,
+            sessionsUsed: Math.max(0, includedSessions - remainingSessions),
             validity: `${up.package?.validity_days || 0} days`,
             remarks: up.package?.description || "",
-            benefits: [],
+            benefits: Array.isArray(up.package?.benefits) ? up.package.benefits.filter((b): b is string => typeof b === "string" && b.trim().length > 0) : [],
             purchasedAt: up.purchase_date,
             startedAt: up.start_date ?? null,
             expiresAt: up.expiry_date,
-            status: up.payment_status === "confirmed" && up.status === "active"
-                ? (up.start_date ? "active" as const : "not_started" as const)
+            status: up.payment_status === "confirmed" && (up.status === "active" || up.status === "not_started")
+                ? (up.start_date || up.status === "active" ? "active" as const : "not_started" as const)
                 : up.payment_status === "pending"
                     ? "inactive" as const
                     : "expired" as const,
             };
         });
-    }, [apiPackages, apiServiceTypes]);
+    }, [apiPackages, apiServiceTypes, bookingUsageByPackage]);
+
+    const membershipCreditsByPackage = useMemo(() => {
+        const credits: Record<string, { classRemaining: number; recoveryRemaining: number }> = {};
+        if (!apiPackages) return credits;
+
+        for (const up of apiPackages) {
+            const packageType = (up.package?.package_type || "").toLowerCase();
+            const serviceTypeName = normalizeClassType(up.package?.service_type?.name);
+            const isMembershipPackage = packageType.includes("membership") || serviceTypeName === "membership";
+            if (!isMembershipPackage) continue;
+
+            const usage = bookingUsageByPackage[up.id] || { total: 0, class: 0, recovery: 0 };
+            const classCredits = parseMembershipBenefitCredits(up.package?.benefits, "class") || (up.package?.sessions_included ?? 0);
+            const recoveryCredits = parseMembershipBenefitCredits(up.package?.benefits, "recovery");
+
+            credits[up.id] = {
+                classRemaining: Math.max(0, classCredits - usage.class),
+                recoveryRemaining: Math.max(0, recoveryCredits - usage.recovery),
+            };
+        }
+
+        return credits;
+    }, [apiPackages, bookingUsageByPackage]);
 
     // Available Packages: from backend API (public), mapped to UI types
     const classPackages: ClassPackage[] = useMemo(() => {
@@ -208,12 +294,8 @@ export const useZenPortal = () => {
             .map((p: ApiPackage) => {
                 // Map backend UUID back to "reformer", "cadillac" frontend IDs based on name
                 const st = apiServiceTypes.find(t => t.id === p.service_type_id);
-                const stName = st?.name.toLowerCase() || "";
-                let classTypeId = "reformer";
-                if (stName.includes("cadillac")) classTypeId = "cadillac";
-                if (stName.includes("hot")) classTypeId = "hot-pilates";
-                if (stName.includes("barre")) classTypeId = "barre";
-                if (stName.includes("recovery")) classTypeId = "recovery-lounge";
+                const stName = st?.name || "";
+                const classTypeId = normalizeClassType(stName) || "reformer";
 
                 return {
                     id: p.id,
@@ -254,13 +336,20 @@ export const useZenPortal = () => {
         if (!apiBookings) return [];
         return apiBookings.map((b: WellnessBooking) => ({
             id: b.id,
+            scheduleId: b.schedule?.id || "",
             className: b.schedule?.service_type?.name || "Class",
-            classTypeId: b.schedule?.service_type?.id || "",
-            date: b.schedule?.class_date || "",
+            classTypeId: normalizeClassType(b.schedule?.service_type?.name || b.schedule?.service_type?.id || ""),
+            date: b.schedule?.class_date?.split("T")[0] || b.booked_at?.split("T")[0] || "",
             time: `${b.schedule?.start_time || ""} – ${b.schedule?.end_time || ""}`,
             instructor: b.schedule?.instructor_name || "",
-            description: "",
-            status: b.status as BookedClass["status"],
+            description: b.schedule?.service_type?.description || b.schedule?.location_note || "",
+            status: (() => {
+                if (b.status === "attended") return "completed" as const;
+                if (b.status === "no_show") return "no-show" as const;
+                if (b.status === "rescheduled") return "cancelled" as const;
+                if (b.status === "cancelled") return "cancelled" as const;
+                return "confirmed" as const;
+            })(),
             bookedAt: b.booked_at,
             packageId: b.user_package_id,
         }));
@@ -288,14 +377,23 @@ export const useZenPortal = () => {
 
         // Match schedule slots by service type name and date
         return apiScheduleSlots
-            .filter((s: ApiScheduleSlot) =>
-                s.class_date === dateStr &&
-                (s.service_type === selectedClassType.name || s.service_type_id === selectedClassType.id)
-            )
+            .filter((s: ApiScheduleSlot) => {
+                if (s.class_date !== dateStr) return false;
+
+                const selectedId = normalizeClassType(selectedClassType.id);
+                const selectedName = normalizeClassType(selectedClassType.name);
+                const scheduleId = normalizeClassType(s.service_type_id);
+                const scheduleName = normalizeClassType(s.service_type);
+
+                return selectedId === scheduleId
+                    || selectedId === scheduleName
+                    || selectedName === scheduleId
+                    || selectedName === scheduleName;
+            })
             .map((s: ApiScheduleSlot) => ({
                 id: s.id,
                 name: s.service_type,
-                classTypeId: s.service_type_id || selectedClassType.id,
+                classTypeId: normalizeClassType(s.service_type_id || s.service_type) || selectedClassType.id,
                 date: s.class_date,
                 startTime: s.start_time,
                 endTime: s.end_time,
@@ -311,7 +409,10 @@ export const useZenPortal = () => {
     // ─── Derived Memos ───────────────────────────────────────────────────────
 
     const activePackages = useMemo(
-        () => purchasedPackages.filter((p) => (p.status === "active" || p.status === "not_started") && p.sessionsUsed < p.sessions),
+        () => purchasedPackages.filter((p) => {
+            const hasRemainingSessions = p.sessions === 0 || p.sessionsUsed < p.sessions;
+            return (p.status === "active" || p.status === "not_started") && hasRemainingSessions;
+        }),
         [purchasedPackages]
     );
 
@@ -320,6 +421,26 @@ export const useZenPortal = () => {
         [activePackages]
     );
 
+    const sessionsByType = useMemo(() => {
+        const totals: Record<string, number> = {};
+        activePackages.forEach((p) => {
+            const key = normalizeClassType(p.classTypeId) || "unknown";
+            const remaining = Math.max(0, p.sessions - p.sessionsUsed);
+            if (key === "membership") {
+                const credit = membershipCreditsByPackage[p.id];
+                if (credit) {
+                    totals["membership-classes"] = (totals["membership-classes"] || 0) + credit.classRemaining;
+                    totals["membership-recovery"] = (totals["membership-recovery"] || 0) + credit.recoveryRemaining;
+                } else {
+                    totals[key] = (totals[key] || 0) + remaining;
+                }
+            } else {
+                totals[key] = (totals[key] || 0) + remaining;
+            }
+        });
+        return totals;
+    }, [activePackages, membershipCreditsByPackage]);
+
     const allowedClassTypes = useMemo(() => {
         // If not authenticated or no service types loaded, allow all from API
         if (!customer || !apiServiceTypes) {
@@ -327,8 +448,8 @@ export const useZenPortal = () => {
         }
 
         const activePkgs = purchasedPackages.filter(p =>
-            (p.status === "active" || p.status === "inactive") &&
-            (p.sessionsUsed < p.sessions || p.classTypeId === "membership")
+            (p.status === "active" || p.status === "not_started" || p.status === "inactive") &&
+            (p.sessions === 0 || p.sessionsUsed < p.sessions)
         );
 
         const isMembershipMember = activePkgs.some(p =>
@@ -337,11 +458,38 @@ export const useZenPortal = () => {
         );
 
         if (isMembershipMember) {
-            return apiServiceTypes?.map(st => st.id) || [];
+            const hasMembershipClassCredits = activePkgs.some((p) => {
+                if (normalizeClassType(p.classTypeId) !== "membership") return false;
+                const credit = membershipCreditsByPackage[p.id];
+                return !!credit && credit.classRemaining > 0;
+            });
+            const hasMembershipRecoveryCredits = activePkgs.some((p) => {
+                if (normalizeClassType(p.classTypeId) !== "membership") return false;
+                const credit = membershipCreditsByPackage[p.id];
+                return !!credit && credit.recoveryRemaining > 0;
+            });
+
+            const classTypesFromPackages = Array.from(new Set(
+                activePkgs
+                    .map(p => normalizeClassType(p.classTypeId))
+                    .filter((id): id is string => !!id && id !== "membership")
+            ));
+
+            if (hasMembershipClassCredits) {
+                ["reformer", "cadillac", "hot-pilates", "barre"].forEach((type) => {
+                    if (!classTypesFromPackages.includes(type)) classTypesFromPackages.push(type);
+                });
+            }
+
+            if (hasMembershipRecoveryCredits && !classTypesFromPackages.includes("recovery-lounge")) {
+                classTypesFromPackages.push("recovery-lounge");
+            }
+
+            return classTypesFromPackages;
         }
 
         return Array.from(new Set(activePkgs.map(p => p.classTypeId).filter((id): id is string => !!id && id !== "membership")));
-    }, [customer, purchasedPackages, apiServiceTypes]);
+    }, [customer, purchasedPackages, apiServiceTypes, membershipCreditsByPackage]);
 
     const stepTitles: Partial<Record<PortalStep, string>> = {
         pricing: `${t('pricing')} — ${t('buy_class')}`,
@@ -505,9 +653,22 @@ export const useZenPortal = () => {
     };
 
     const handleSelectTime = (slot: any) => {
+        const alreadyBooked = bookedClasses.some(
+            (b) => b.scheduleId === slot.id && b.status === "confirmed"
+        );
+
+        if (alreadyBooked) {
+            toast.error("You already booked this session.");
+            return;
+        }
+
         setSelectedSlots(prev => {
             const isSelected = prev.some(s => s.id === slot.id);
             if (isSelected) return prev.filter(s => s.id !== slot.id);
+
+            if (rescheduleFromBookingId) {
+                return [slot];
+            }
 
             const totalRequested = prev.length + 1;
             if (customer && sessionsRemaining > 0 && totalRequested > sessionsRemaining) {
@@ -523,13 +684,60 @@ export const useZenPortal = () => {
         if (selectedSlots.length === 0) return;
         if (!customer) { requireAuth("/book"); return; }
 
-        // Find an active user_package that matches the selected class type
-        const activePkg = apiPackages?.find(up => {
-            const isActive = up.payment_status === "confirmed" && up.status === "active";
-            const hasSessions = up.sessions_remaining !== null && up.sessions_remaining > 0;
-            const typeMatches = up.package?.service_type?.id === selectedClassType?.id;
-            return isActive && hasSessions && typeMatches;
-        });
+        if (rescheduleFromBookingId) {
+            if (selectedSlots.length !== 1) {
+                toast.error("Please select exactly one new slot to reschedule.");
+                return;
+            }
+
+            try {
+                await rescheduleBookingMutation.mutateAsync({
+                    bookingId: rescheduleFromBookingId,
+                    newScheduleId: selectedSlots[0].id,
+                });
+
+                setRescheduleFromBookingId(null);
+                setSelectedSlots([]);
+                setSelectedDate(undefined);
+                navigate("/success");
+                toast.success("Booking rescheduled successfully!");
+            } catch (err: any) {
+                const message = err?.body?.message || err?.message || "Reschedule failed. Please try again.";
+                toast.error(message);
+            }
+
+            return;
+        }
+
+        // Non-membership packages are type-specific.
+        // Membership packages can book any class type.
+        const selectedType = normalizeClassType(selectedClassType?.id || selectedClassType?.name);
+        const matchingPackages = activePackages
+            .filter((p) => normalizeClassType(p.classTypeId) === selectedType)
+            .sort((a, b) => {
+                const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
+                const bExpiry = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
+                return aExpiry - bExpiry;
+            });
+
+        const membershipPackages = activePackages
+            .filter((p) => {
+                if (normalizeClassType(p.classTypeId) !== "membership") return false;
+                const credit = membershipCreditsByPackage[p.id];
+                if (!credit) return false;
+
+                if (selectedType === "recovery-lounge") return credit.recoveryRemaining > 0;
+                return credit.classRemaining > 0;
+            })
+            .sort((a, b) => {
+                const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
+                const bExpiry = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
+                return aExpiry - bExpiry;
+            });
+
+        const validMappedPkg = matchingPackages[0] || membershipPackages[0];
+        
+        const activePkg = apiPackages?.find(up => up.id === validMappedPkg?.id);
 
         if (!activePkg) {
             toast.error(`You don't have an active package for ${selectedClassType?.name}. Please purchase one first.`);
@@ -561,6 +769,20 @@ export const useZenPortal = () => {
         const bookingDate = new Date(`${booking.date}T${timeStr}`);
         const hoursUntil = (bookingDate.getTime() - Date.now()) / (1000 * 60 * 60);
         return hoursUntil > 24;
+    };
+
+    const isBookingLoading = bookClassMutation.isPending || rescheduleBookingMutation.isPending;
+
+    const handleStartReschedule = async (bookingId: string) => {
+        setRescheduleFromBookingId(bookingId);
+        setSelectedSlots([]);
+        setSelectedDate(undefined);
+        toast.success("Select a new time slot to complete reschedule.");
+    };
+
+    const handleCancelRescheduleMode = () => {
+        setRescheduleFromBookingId(null);
+        setSelectedSlots([]);
     };
 
     // ── Cancel Booking → Backend ──
@@ -619,9 +841,15 @@ export const useZenPortal = () => {
         selectedSlots,
         handleSelectTime,
         handleCompleteBooking,
+        isBookingLoading,
         sessionsRemaining,
+        sessionsByType,
+        membershipCreditsByPackage,
         canReschedule,
         handleCancelBooking,
+        handleStartReschedule,
+        isRescheduleMode: !!rescheduleFromBookingId,
+        handleCancelRescheduleMode,
         goBack,
         requireAuth,
         navigate,

@@ -18,6 +18,7 @@ export interface UserPackage {
         name: string;
         package_type: string;
         sessions_included: number | null;
+        benefits?: string[] | null;
         price: string;
         validity_days: number;
         description: string | null;
@@ -50,6 +51,7 @@ export interface WellnessBooking {
         service_type: {
             id: string;
             name: string;
+            description?: string | null;
         };
     };
     user_package: {
@@ -154,6 +156,13 @@ export function useBookClass() {
                 data
             ),
         onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["customer", "bookings"] });
+            queryClient.invalidateQueries({ queryKey: ["customer", "packages"] });
+            queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });
+        },
+        onError: () => {
+            // Backend may complete booking but fail on side effects (e.g., SMTP).
+            // Refetch to keep UI consistent with server state.
             queryClient.invalidateQueries({ queryKey: ["customer", "bookings"] });
             queryClient.invalidateQueries({ queryKey: ["customer", "packages"] });
             queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });

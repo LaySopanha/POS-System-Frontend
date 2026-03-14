@@ -3,7 +3,7 @@ import { api } from "../api";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type AdminNotificationType = "order" | "system" | "package_purchase";
+export type AdminNotificationType = "order" | "system" | "package_purchase" | "booking" | "booking_cancelled" | "booking_rescheduled";
 
 export interface AdminNotification {
     id: string;
@@ -74,5 +74,26 @@ export function useDeleteAdminNotification() {
                 .then((r) => r),
         onSuccess: () =>
             qc.invalidateQueries({ queryKey: adminNotificationQueryKeys.all }),
+    });
+}
+
+export function useSendAdminNotificationEmail() {
+    return useMutation({
+        mutationFn: ({
+            notificationId,
+            subject,
+            message,
+            to_email,
+        }: {
+            notificationId: string;
+            subject: string;
+            message: string;
+            to_email?: string;
+        }) =>
+            api.post<{ message: string }>(`/admin/notifications/${notificationId}/email`, {
+                subject,
+                message,
+                to_email,
+            }),
     });
 }

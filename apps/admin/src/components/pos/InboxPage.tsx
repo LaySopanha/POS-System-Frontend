@@ -5,28 +5,39 @@ import {
   useMarkAdminNotificationRead,
   useMarkAllAdminNotificationsRead,
   useDeleteAdminNotification,
+  useSendAdminNotificationEmail,
   type AdminNotificationType,
   type AdminNotification,
 } from "@repo/store";
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from "@repo/ui";
 import { Input } from "@repo/ui";
+import { Textarea } from "@repo/ui";
 
 const typeIcon: Record<AdminNotificationType, typeof Inbox> = {
   order: ShoppingBag,
   system: Info,
   package_purchase: Package,
+  booking: Inbox,
+  booking_cancelled: Inbox,
+  booking_rescheduled: Inbox,
 };
 
 const typeColor: Record<AdminNotificationType, string> = {
   order: "bg-amber-100 text-amber-700",
   system: "bg-muted text-muted-foreground",
   package_purchase: "bg-primary/20 text-primary",
+  booking: "bg-blue-100 text-blue-700",
+  booking_cancelled: "bg-rose-100 text-rose-700",
+  booking_rescheduled: "bg-violet-100 text-violet-700",
 };
 
 const typeLabel: Record<AdminNotificationType, string> = {
   order: "Order",
   system: "System",
   package_purchase: "Purchase",
+  booking: "Booking",
+  booking_cancelled: "Cancelled",
+  booking_rescheduled: "Rescheduled",
 };
 
 const InboxPage = () => {
@@ -34,10 +45,13 @@ const InboxPage = () => {
   const markRead = useMarkAdminNotificationRead();
   const markAllRead = useMarkAllAdminNotificationsRead();
   const deleteNotif = useDeleteAdminNotification();
+  const sendNotificationEmail = useSendAdminNotificationEmail();
 
   const [filter, setFilter] = useState<"all" | AdminNotificationType>("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
 
   const filtered = items.filter((n) => {
     const matchType = filter === "all" || n.type === filter;
@@ -52,8 +66,34 @@ const InboxPage = () => {
 
   const handleSelect = (n: AdminNotification) => {
     setSelectedId(n.id);
+    setEmailSubject(`Regarding: ${n.title}`);
+    setEmailBody(n.message);
     if (!n.read) markRead.mutate(n.id);
   };
+  const selectedUserId = typeof selected?.data?.user_id === "string"
+    ? selected.data.user_id
+    : null;
+
+  const selectedToEmail = typeof selected?.data?.to_email === "string"
+    ? selected.data.to_email
+    : undefined;
+
+  const handleSendEmail = async () => {
+    if (!selected) return;
+    if (!emailSubject.trim() || !emailBody.trim()) return;
+
+    try {
+      await sendNotificationEmail.mutateAsync({
+        notificationId: selected.id,
+        subject: emailSubject.trim(),
+        message: emailBody.trim(),
+        to_email: selectedToEmail,
+      });
+    } catch {
+      // Error handled by mutation caller state; keep UI simple here.
+    }
+  };
+
 
   const handleMarkUnread = (_id: string) => {
     // Optimistic: not supported server-side yet, just refresh
@@ -98,7 +138,7 @@ const InboxPage = () => {
           <Input placeholder="Search inbox..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <div className="flex gap-1.5">
-          {(["all", "order", "system", "package_purchase"] as const).map((t) => (
+          {(["all", "order", "system", "package_purchase", "booking", "booking_cancelled", "booking_rescheduled"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setFilter(t)}
@@ -210,6 +250,32 @@ const InboxPage = () => {
                       <span className="text-muted-foreground">{String(value)}</span>
                     </p>
                   ))}
+                </div>
+              )}
+
+              {(selectedUserId || selectedToEmail) && (
+                <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Send Email</p>
+                  <Input
+                    placeholder="Subject"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                  />
+                  <Textarea
+                    placeholder="Write your message to the customer..."
+                    value={emailBody}
+                    onChange={(e) => setEmailBody(e.target.value)}
+                    rows={5}
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleSendEmail}
+                      disabled={sendNotificationEmail.isPending || !emailSubject.trim() || !emailBody.trim()}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                    >
+                      {sendNotificationEmail.isPending ? "Sending..." : "Send Email"}
+                    </button>
+                  </div>
                 </div>
               )}
 
