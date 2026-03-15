@@ -3,13 +3,14 @@ import { useTranslation } from "react-i18next";
 import {
     User, LogOut, Package, History, Users, Info,
     LayoutDashboard, TrendingUp, CreditCard,
-    ChevronRight, Calendar, Clock, MapPin, CheckCircle2, Check,
+    ChevronRight, ChevronLeft, Calendar as CalendarIcon, Clock, MapPin, CheckCircle2, Check,
     AlertCircle, Trophy, Star, ShieldCheck,
     Globe, FileText, Edit3, Save, X, DownloadCloud, KeyRound, Loader2
 } from "lucide-react";
 import { cn } from "@repo/ui";
 import { toast } from "@repo/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui";
+import { Calendar, Popover, PopoverContent, PopoverTrigger } from "@repo/ui";
 import { classTypes } from "@repo/store";
 import { AccountTab, PurchasedPackage, BookedClass, PaymentRecord } from "@/types/zen-portal.ts";
 import type { LoyaltyInfo, CustomerStats, CustomerWaitlistEntry } from "@/hooks/use-customer-api";
@@ -107,6 +108,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
     const [visiblePastPackages, setVisiblePastPackages] = React.useState(6);
     const [visibleActivePackages, setVisibleActivePackages] = React.useState(3);
     const [visiblePreviousBookings, setVisiblePreviousBookings] = React.useState(6);
+    const [datePickerOpen, setDatePickerOpen] = React.useState(false);
     // Profile editing state
     const [isEditingProfile, setIsEditingProfile] = React.useState(false);
     const [profileForm, setProfileForm] = React.useState<{
@@ -245,7 +247,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
         { id: "dashboard", label: t('dashboard'), icon: LayoutDashboard },
         { id: "packages", label: t('my_membership_package'), icon: Package },
         { id: "classes", label: t('my_classes'), icon: History },
-        { id: "book", label: t('book_a_class'), icon: Calendar },
+        { id: "book", label: t('book_a_class'), icon: CalendarIcon },
         { id: "progress", label: t('my_progress'), icon: TrendingUp },
         { id: "payments", label: t('payments'), icon: CreditCard },
         { id: "profile", label: t('profile'), icon: ShieldCheck },
@@ -393,7 +395,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                 <div className="flex justify-between items-center">
                                     <span className="text-[10px] font-black text-primary uppercase tracking-widest">{t('next_session')}</span>
                                     <div className="flex items-center gap-1 text-xs font-bold text-foreground">
-                                        <Calendar size={14} className="text-primary" />
+                                        <CalendarIcon size={14} className="text-primary" />
                                         {nextClass.date}
                                     </div>
                                 </div>
@@ -418,7 +420,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
                         ) : (
                             <div className="rounded-[2.5rem] bg-muted/20 border-2 border-dashed border-border/60 p-10 text-center flex flex-col items-center gap-4">
                                 <div className="h-16 w-16 bg-muted/40 rounded-full flex items-center justify-center">
-                                    <Calendar className="text-muted-foreground" size={30} />
+                                    <CalendarIcon className="text-muted-foreground" size={30} />
                                 </div>
                                 <div>
                                     <h3 className="text-xl font-bold text-foreground">{t('start_your_journey')}</h3>
@@ -648,7 +650,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
                         {/* Upcoming Section */}
                         <div className="space-y-4">
                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2 px-2">
-                                <Calendar size={14} className="text-primary" /> {t('upcoming_sessions')}
+                                <CalendarIcon size={14} className="text-primary" /> {t('upcoming_sessions')}
                             </h3>
                             {upcomingBookings.map((booking) => (
                                 <div key={booking.id} className="relative rounded-[2rem] border border-border bg-card p-6 group hover:border-primary/30 transition-all shadow-sm">
@@ -742,7 +744,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
                             {upcomingBookings.length === 0 && (
                                 <div className="py-16 bg-muted/5 rounded-[2.5rem] border border-dashed border-border/60 text-center flex flex-col items-center gap-3">
                                     <div className="w-12 h-12 rounded-2xl bg-muted/10 flex items-center justify-center text-muted-foreground/30">
-                                        <Calendar size={24} />
+                                        <CalendarIcon size={24} />
                                     </div>
                                     <p className="text-sm text-muted-foreground font-medium italic">{t('no_upcoming_bookings_msg')}</p>
                                 </div>
@@ -920,7 +922,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                         )}
                                     >
                                         <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-colors", selectedClassType?.id === typeId ? "bg-white/20" : "bg-matcha/10 text-matcha")}>
-                                            <Calendar className="w-5 h-5" />
+                                            <CalendarIcon className="w-5 h-5" />
                                         </div>
                                         <div>
                                             <p className="font-black text-[10px] uppercase tracking-[0.1em] leading-none">
@@ -970,32 +972,117 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                     </div>
                                 )}
 
-                                {/* Simple Weekly Calendar Placeholder */}
+                                {/* Date selection: week strip + full calendar */}
                                 <div className="bg-white/40 backdrop-blur-md rounded-[2rem] p-6 border border-white/40 shadow-sm">
                                     <div className="flex items-center justify-between mb-4">
                                         <h3 className="font-bold text-zen-dark">{t('select_date')}</h3>
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-matcha">{selectedDate ? selectedDate.toDateString() : t('choose_day')}</span>
+                                        <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                                            <div className="flex gap-2 items-center">
+                                                <PopoverTrigger asChild>
+                                                    <button
+                                                        type="button"
+                                                        className="text-[10px] font-black uppercase tracking-widest text-matcha hover:underline focus:outline-none"
+                                                    >
+                                                        {selectedDate ? selectedDate.toDateString() : t('choose_day')}
+                                                    </button>
+                                                </PopoverTrigger>
+                                                <PopoverTrigger asChild>
+                                                    <button
+                                                        type="button"
+                                                        aria-label="Open calendar"
+                                                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-matcha/40 bg-white/70 text-matcha font-semibold text-xs shadow-sm hover:bg-matcha/10 focus:outline-none focus:ring-2 focus:ring-matcha/40 transition-all"
+                                                        onClick={() => setDatePickerOpen(true)}
+                                                    >
+                                                        <CalendarIcon className="w-4 h-4" />
+                                                        <span className="hidden sm:inline">{t('open_calendar', 'Open Calendar')}</span>
+                                                    </button>
+                                                </PopoverTrigger>
+                                            </div>
+                                            <PopoverContent className="w-auto p-0 border-border rounded-2xl bg-card shadow-lg" align="end">
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={selectedDate}
+                                                    onSelect={(date) => {
+                                                        setSelectedDate(date);
+                                                        setDatePickerOpen(false);
+                                                    }}
+                                                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                                                    className="rounded-2xl border-0"
+                                                    classNames={{
+                                                        day_selected: "bg-matcha text-white hover:bg-matcha hover:text-white focus:bg-matcha focus:text-white",
+                                                        day_today: "bg-matcha/20 text-matcha font-bold",
+                                                    }}
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
                                     </div>
-                                    <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                                        {[...Array(7)].map((_, i) => {
-                                            const d = new Date();
+                                    {(() => {
+                                        const base = selectedDate ? new Date(selectedDate) : new Date();
+                                        const weekStart = new Date(base);
+                                        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+                                        const weekDays = [...Array(7)].map((_, i) => {
+                                            const d = new Date(weekStart);
                                             d.setDate(d.getDate() + i);
-                                            const isSelected = selectedDate?.toDateString() === d.toDateString();
-                                            return (
-                                                <button
-                                                    key={i}
-                                                    onClick={() => setSelectedDate(d)}
-                                                    className={cn(
-                                                        "flex-shrink-0 w-14 h-20 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all",
-                                                        isSelected ? "bg-matcha text-white shadow-md shadow-matcha/20" : "bg-white/50 text-zen-dark hover:bg-white"
-                                                    )}
-                                                >
-                                                    <span className="text-[10px] uppercase font-bold opacity-60">{d.toLocaleString('en-US', { weekday: 'short' })}</span>
-                                                    <span className="text-lg font-black">{d.getDate()}</span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
+                                            return d;
+                                        });
+                                        const today = new Date();
+                                        today.setHours(0, 0, 0, 0);
+                                        const canGoPrev = weekStart.getTime() > today.getTime();
+                                        return (
+                                            <>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const prev = new Date(weekStart);
+                                                            prev.setDate(prev.getDate() - 7);
+                                                            setSelectedDate(prev.getTime() >= today.getTime() ? prev : new Date());
+                                                        }}
+                                                        disabled={!canGoPrev}
+                                                        className={cn(
+                                                            "flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border border-border bg-card/70 text-zen-dark transition-colors",
+                                                            canGoPrev ? "hover:bg-matcha/10 hover:border-matcha/30" : "opacity-40 cursor-not-allowed"
+                                                        )}
+                                                    >
+                                                        <ChevronLeft className="w-4 h-4" />
+                                                    </button>
+                                                    <div className="flex gap-2 overflow-x-auto flex-1 no-scrollbar">
+                                                        {weekDays.map((d) => {
+                                                            const isSelected = selectedDate?.toDateString() === d.toDateString();
+                                                            const isPast = d.getTime() < today.getTime();
+                                                            return (
+                                                                <button
+                                                                    key={d.toISOString()}
+                                                                    type="button"
+                                                                    onClick={() => !isPast && setSelectedDate(d)}
+                                                                    disabled={isPast}
+                                                                    className={cn(
+                                                                        "flex-shrink-0 w-14 h-20 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all",
+                                                                        isSelected ? "bg-matcha text-white shadow-md shadow-matcha/20" : "bg-white/50 text-zen-dark hover:bg-white",
+                                                                        isPast && "opacity-50 cursor-not-allowed"
+                                                                    )}
+                                                                >
+                                                                    <span className="text-[10px] uppercase font-bold opacity-60">{d.toLocaleString('en-US', { weekday: 'short' })}</span>
+                                                                    <span className="text-lg font-black">{d.getDate()}</span>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const next = new Date(weekStart);
+                                                            next.setDate(next.getDate() + 7);
+                                                            setSelectedDate(next);
+                                                        }}
+                                                        className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border border-border bg-card/70 text-zen-dark hover:bg-matcha/10 hover:border-matcha/30 transition-colors"
+                                                    >
+                                                        <ChevronRight className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Sessions List */}

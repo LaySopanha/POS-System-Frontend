@@ -566,12 +566,7 @@ export const useZenPortal = () => {
                 remaining: Math.max(0, p.sessions - p.sessionsUsed),
                 source: "package" as const,
                 expiresAt: p.expiresAt ? new Date(p.expiresAt).getTime() : Number.MAX_SAFE_INTEGER,
-            }))
-            .sort((a, b) => a.expiresAt - b.expiresAt);
-
-        if (matchingPackages.length > 0) {
-            return matchingPackages.map(({ expiresAt, ...rest }) => rest);
-        }
+            }));
 
         const membershipPackages = activePackages
             .filter((p) => {
@@ -594,10 +589,13 @@ export const useZenPortal = () => {
                     source: "membership" as const,
                     expiresAt: p.expiresAt ? new Date(p.expiresAt).getTime() : Number.MAX_SAFE_INTEGER,
                 };
-            })
+            });
+
+        const combined = [...matchingPackages, ...membershipPackages]
+            .filter((item) => item.remaining > 0)
             .sort((a, b) => a.expiresAt - b.expiresAt);
 
-        return membershipPackages.map(({ expiresAt, ...rest }) => rest);
+        return combined.map(({ expiresAt, ...rest }) => rest);
     }, [selectedClassType, activePackages, membershipCreditsByPackage, nonMembershipRecoveryBenefitsByPackage]);
 
     const activeWaitlistBySchedule = useMemo(() => {
