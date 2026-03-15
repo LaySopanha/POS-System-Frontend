@@ -32,6 +32,27 @@ export interface ApiBooking {
     };
 }
 
+export interface ApiWaitlistEntry {
+    id: string;
+    schedule_id: string;
+    user_id: string;
+    user_package_id: string | null;
+    status: "waiting" | "promoted" | "removed" | "expired";
+    position: number;
+    joined_at: string;
+    promoted_at: string | null;
+    expires_at: string | null;
+    removed_at: string | null;
+    removed_reason: string | null;
+    promoted_booking_id: string | null;
+    user?: {
+        id: string;
+        first_name: string | null;
+        last_name: string | null;
+        email: string;
+    };
+}
+
 export interface ApiSchedule {
     id: string;
     service_type_id: string;
@@ -162,7 +183,7 @@ export function useUpdateBookingAttendance() {
         }: {
             scheduleId: string;
             bookingId: string;
-            status: "confirmed" | "attended" | "no_show";
+            status: "attended" | "no_show";
         }) =>
             api.put<{ message: string }>(
                 `/admin/wellness/schedules/${scheduleId}/bookings/${bookingId}/attendance`,
@@ -171,6 +192,60 @@ export function useUpdateBookingAttendance() {
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: scheduleQueryKeys.all });
             qc.invalidateQueries({ queryKey: scheduleQueryKeys.detail(vars.scheduleId) });
+        },
+    });
+}
+
+export function useApiWaitlist(scheduleId: string | null) {
+    return useQuery({
+        queryKey: [...scheduleQueryKeys.all, "waitlist", scheduleId ?? ""],
+        queryFn: () =>
+            api
+                .get<{ data: ApiWaitlistEntry[] }>(`/admin/wellness/schedules/${scheduleId}/waitlist`)
+                .then((r) => r.data),
+        enabled: !!scheduleId,
+        staleTime: 15 * 1000,
+    });
+}
+
+export function usePromoteWaitlistEntry() {
+    const qc = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ scheduleId, entryId }: { scheduleId: string; entryId: string }) =>
+            api.post<{ message: string }>(`/admin/wellness/schedules/${scheduleId}/waitlist/${entryId}/promote`),
+        onSuccess: (_data, vars) => {
+            qc.invalidateQueries({ queryKey: scheduleQueryKeys.all });
+            qc.invalidateQueries({ queryKey: [...scheduleQueryKeys.all, "waitlist", vars.scheduleId] });
+            qc.invalidateQueries({ queryKey: scheduleQueryKeys.detail(vars.scheduleId) });
+        },
+    });
+}
+
+export function useRemoveWaitlistEntry() {
+    const qc = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ scheduleId, entryId }: { scheduleId: string; entryId: string }) =>
+            api.delete<{ message: string }>(`/admin/wellness/schedules/${scheduleId}/waitlist/${entryId}`),
+        onSuccess: (_data, vars) => {
+            qc.invalidateQueries({ queryKey: scheduleQueryKeys.all });
+            qc.invalidateQueries({ queryKey: [...scheduleQueryKeys.all, "waitlist", vars.scheduleId] });
+            qc.invalidateQueries({ queryKey: scheduleQueryKeys.detail(vars.scheduleId) });
+        },
+    });
+}
+
+export function useReorderWaitlist() {
+    const qc = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ scheduleId, entryIds }: { scheduleId: string; entryIds: string[] }) =>
+            api.put<{ message: string }>(`/admin/wellness/schedules/${scheduleId}/waitlist/reorder`, {
+                entry_ids: entryIds,
+            }),
+        onSuccess: (_data, vars) => {
+            qc.invalidateQueries({ queryKey: [...scheduleQueryKeys.all, "waitlist", vars.scheduleId] });
         },
     });
 }

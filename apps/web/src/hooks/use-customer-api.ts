@@ -63,6 +63,30 @@ export interface WellnessBooking {
     };
 }
 
+export interface CustomerWaitlistEntry {
+    id: string;
+    schedule_id: string;
+    user_id: string;
+    user_package_id: string | null;
+    status: "waiting" | "promoted" | "removed" | "expired";
+    position: number;
+    joined_at: string;
+    promoted_at: string | null;
+    removed_at: string | null;
+    removed_reason: string | null;
+    schedule?: {
+        id: string;
+        class_date: string;
+        start_time: string;
+        end_time: string;
+        location_note: string | null;
+        service_type?: {
+            id: string;
+            name: string;
+        };
+    };
+}
+
 export interface LoyaltyInfo {
     points_balance: number;
     total_points_earned: number;
@@ -99,6 +123,18 @@ export function useMyBookings(enabled = true) {
         queryFn: () =>
             api
                 .get<{ data: WellnessBooking[] }>("/customer/bookings")
+                .then((r) => r.data),
+        enabled,
+        staleTime: 30 * 1000,
+    });
+}
+
+export function useMyWaitlist(enabled = true) {
+    return useQuery({
+        queryKey: ["customer", "waitlist"],
+        queryFn: () =>
+            api
+                .get<{ data: CustomerWaitlistEntry[] }>("/customer/waitlist")
                 .then((r) => r.data),
         enabled,
         staleTime: 30 * 1000,
@@ -216,6 +252,32 @@ export function useRescheduleBooking() {
             ),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["customer", "bookings"] });
+            queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });
+        },
+    });
+}
+
+export function useJoinWaitlist() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (data: { schedule_id: string; user_package_id: string }) =>
+            api.post<{ message: string; data: CustomerWaitlistEntry }>("/customer/waitlist/join", data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["customer", "waitlist"] });
+            queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });
+        },
+    });
+}
+
+export function useLeaveWaitlist() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (entryId: string) =>
+            api.delete<{ message: string; data: CustomerWaitlistEntry }>(`/customer/waitlist/${entryId}/leave`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["customer", "waitlist"] });
             queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });
         },
     });

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Clock, Users, Calendar, AlertCircle, CheckCircle2, XCircle, UserX, Plus, Pencil, Loader2, Trash2 } from "lucide-react";
+import { useMemo, useState, useCallback } from "react";
+import { Clock, Users, Calendar, AlertCircle, CheckCircle2, XCircle, UserX, Plus, Pencil, Loader2, Trash2, GripVertical } from "lucide-react";
 import { cn } from "@repo/ui";
 import { Button } from "@repo/ui";
 import { Skeleton } from "@repo/ui";
@@ -11,15 +11,35 @@ import { Label } from "@repo/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui";
 import { toast } from "sonner";
 import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   useApiServiceTypes,
   useApiInstructors,
   useApiSchedules,
   useApiScheduleDetail,
+  useApiWaitlist,
   useCreateSchedule,
   useUpdateSchedule,
   useDeleteSchedule,
   useUpdateBookingAttendance,
+  usePromoteWaitlistEntry,
+  useRemoveWaitlistEntry,
+  useReorderWaitlist,
   type ApiSchedule,
+  type ApiWaitlistEntry,
 } from "@repo/store";
 import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui";
 import { Calendar as CalendarComponent } from "@repo/ui";
@@ -54,6 +74,68 @@ const emptySlotForm = {
   startTime: "09:00", endTime: "10:00", capacity: "10",
   locationNote: "", status: "available" as ApiSchedule["status"]
 };
+
+// ─── Drag-and-drop sortable row for the waitlist queue ──────────────────────
+function WaitlistSortableRow({
+  entry,
+  name,
+  onPromote,
+  onRemove,
+  promoteDisabled,
+  removeDisabled,
+}: {
+  entry: ApiWaitlistEntry;
+  name: string;
+  onPromote: () => void;
+  onRemove: () => void;
+  promoteDisabled: boolean;
+  removeDisabled: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        "flex items-center justify-between rounded-lg bg-muted/20 px-3 py-2 select-none",
+        isDragging && "opacity-70 shadow-lg ring-1 ring-primary/30 bg-card z-50"
+      )}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <span
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground transition-colors touch-none"
+        >
+          <GripVertical className="h-4 w-4" />
+        </span>
+        <span className="text-[11px] font-bold text-primary">#{entry.position}</span>
+        <span className="text-sm text-foreground truncate">{name}</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 px-2 text-[10px]"
+          disabled={promoteDisabled}
+          onClick={onPromote}
+        >
+          Promote
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 px-2 text-[10px]"
+          disabled={removeDisabled}
+          onClick={onRemove}
+        >
+          Remove
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 const ClassesPage = () => {
   const { data: serviceTypes = [] } = useApiServiceTypes();
@@ -123,6 +205,7 @@ const ClassesPage = () => {
 
   // Fetch detail (with bookings) for selected class
   const { data: scheduleDetail } = useApiScheduleDetail(selectedClassId);
+  const { data: waitlistEntries = [] } = useApiWaitlist(selectedClassId);
   const selectedClass = scheduleDetail?.schedule ?? null;
   const bookings = selectedClass?.bookings ?? [];
 
@@ -130,6 +213,33 @@ const ClassesPage = () => {
   const updateSchedule = useUpdateSchedule();
   const deleteSchedule = useDeleteSchedule();
   const updateBookingAttendance = useUpdateBookingAttendance();
+  const promoteWaitlistEntry = usePromoteWaitlistEntry();
+  const removeWaitlistEntry = useRemoveWaitlistEntry();
+  const reorderWaitlist = useReorderWaitlist();
+
+  // Drag-and-drop sensors
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const handleWaitlistDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !selectedClass) return;
+
+    const queue = waitlistEntries
+      .filter((w: ApiWaitlistEntry) => w.status === "waiting")
+      .sort((a, b) => a.position - b.position);
+    const oldIds = queue.map((e) => e.id);
+    const oldIndex = oldIds.indexOf(active.id as string);
+    const newIndex = oldIds.indexOf(over.id as string);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const newIds = arrayMove(oldIds, oldIndex, newIndex);
+    try {
+      await reorderWaitlist.mutateAsync({ scheduleId: selectedClass.id, entryIds: newIds });
+      toast.success("Waitlist reordered");
+    } catch (err: any) {
+      toast.error(err?.body?.message || err?.message || "Failed to reorder waitlist");
+    }
+  }, [waitlistEntries, selectedClass, reorderWaitlist]);
 
   // Add slot dialog
   const [showAddSlot, setShowAddSlot] = useState(false);
@@ -230,7 +340,7 @@ const ClassesPage = () => {
 
   const handleAttendanceUpdate = async (
     bookingId: string,
-    status: "confirmed" | "attended" | "no_show"
+    status: "attended" | "no_show"
   ) => {
     if (!selectedClass) return;
     try {
@@ -248,6 +358,29 @@ const ClassesPage = () => {
   // ─── Booking/Reservation helpers ──
   const confirmed = bookings.filter(r => r.status === "confirmed" || r.status === "attended");
   const cancelled = bookings.filter(r => r.status === "cancelled" || r.status === "no_show");
+  const waitingQueue = waitlistEntries.filter((w: ApiWaitlistEntry) => w.status === "waiting").sort((a, b) => a.position - b.position);
+
+  const handlePromoteWaitlist = async (entryId: string) => {
+    if (!selectedClass) return;
+    try {
+      await promoteWaitlistEntry.mutateAsync({ scheduleId: selectedClass.id, entryId });
+      toast.success("Waitlist entry promoted");
+    } catch (err: any) {
+      toast.error(err?.body?.message || err?.message || "Failed to promote waitlist entry");
+    }
+  };
+
+  const handleRemoveWaitlist = async (entryId: string) => {
+    if (!selectedClass) return;
+    try {
+      await removeWaitlistEntry.mutateAsync({ scheduleId: selectedClass.id, entryId });
+      toast.success("Waitlist entry removed");
+    } catch (err: any) {
+      toast.error(err?.body?.message || err?.message || "Failed to remove waitlist entry");
+    }
+  };
+
+
 
   if (schedulesLoading) {
     return (
@@ -638,17 +771,6 @@ const ClassesPage = () => {
                                     </Button>
                                   </>
                                 )}
-                                {r.status === "attended" && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 px-2 text-[10px]"
-                                    disabled={updateBookingAttendance.isPending}
-                                    onClick={() => handleAttendanceUpdate(r.id, "confirmed")}
-                                  >
-                                    Undo
-                                  </Button>
-                                )}
                               </div>
                             </div>
                           );
@@ -675,17 +797,6 @@ const ClassesPage = () => {
                                   <StatusIcon className="h-3 w-3" />
                                   {r.status.replace("_", " ")}
                                 </div>
-                                {r.status === "no_show" && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 px-2 text-[10px]"
-                                    disabled={updateBookingAttendance.isPending}
-                                    onClick={() => handleAttendanceUpdate(r.id, "attended")}
-                                  >
-                                    Mark Attended
-                                  </Button>
-                                )}
                               </div>
                             </div>
                           );
@@ -693,6 +804,51 @@ const ClassesPage = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* Waitlist */}
+                  <div className="border-t border-border pt-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                      Waitlist ({waitingQueue.length})
+                    </p>
+                    {reorderWaitlist.isPending && (
+                      <p className="text-[10px] text-muted-foreground mb-1 flex items-center gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Saving order…
+                      </p>
+                    )}
+                    {waitingQueue.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-1">No customers on the waitlist.</p>
+                    ) : (
+                      <DndContext
+                        sensors={dndSensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleWaitlistDragEnd}
+                      >
+                        <SortableContext
+                          items={waitingQueue.map((e) => e.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <div className="space-y-1.5">
+                            {waitingQueue.map((entry) => {
+                              const name = entry.user
+                                ? `${entry.user.first_name ?? ""} ${entry.user.last_name ?? ""}`.trim() || entry.user.email
+                                : "—";
+                              return (
+                                <WaitlistSortableRow
+                                  key={entry.id}
+                                  entry={entry}
+                                  name={name}
+                                  onPromote={() => handlePromoteWaitlist(entry.id)}
+                                  onRemove={() => handleRemoveWaitlist(entry.id)}
+                                  promoteDisabled={promoteWaitlistEntry.isPending}
+                                  removeDisabled={removeWaitlistEntry.isPending}
+                                />
+                              );
+                            })}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                    )}
+                  </div>
 
                   {bookings.length === 0 && (
                     <div className="border-t border-border pt-3">

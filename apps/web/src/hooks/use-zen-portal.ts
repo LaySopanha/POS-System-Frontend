@@ -8,12 +8,15 @@ import type { ApiScheduleSlot, ApiPackage } from "./use-wellness-api";
 import {
     useMyPackages,
     useMyBookings,
+    useMyWaitlist,
     useMyLoyalty,
     useMyLoyaltyHistory,
     useMyPayments,
     useMyStats,
     usePurchasePackage,
     useBookClass,
+    useJoinWaitlist,
+    useLeaveWaitlist,
     useCancelBooking,
     useRescheduleBooking,
 } from "./use-customer-api";
@@ -66,16 +69,19 @@ export const useZenPortal = () => {
     const { data: apiPackagesAll } = useServicePackages("all"); // Fetch all active packages
 
     // Customer endpoints (auth needed)
-    const { data: apiPackages } = useMyPackages(isAuthenticated);
-    const { data: apiBookings } = useMyBookings(isAuthenticated);
-    const { data: loyaltyData } = useMyLoyalty(isAuthenticated);
-    const { data: loyaltyHistory } = useMyLoyaltyHistory(isAuthenticated);
-    const { data: apiPayments } = useMyPayments(isAuthenticated);
-    const { data: statsData } = useMyStats(isAuthenticated);
+    const { data: apiPackages, isLoading: isPackagesLoading } = useMyPackages(isAuthenticated);
+    const { data: apiBookings, isLoading: isBookingsLoading } = useMyBookings(isAuthenticated);
+    const { data: apiWaitlist, isLoading: isWaitlistLoading } = useMyWaitlist(isAuthenticated);
+    const { data: loyaltyData, isLoading: isLoyaltyLoading } = useMyLoyalty(isAuthenticated);
+    const { data: loyaltyHistory, isLoading: isLoyaltyHistoryLoading } = useMyLoyaltyHistory(isAuthenticated);
+    const { data: apiPayments, isLoading: isPaymentsLoading } = useMyPayments(isAuthenticated);
+    const { data: statsData, isLoading: isStatsLoading } = useMyStats(isAuthenticated);
 
     // Mutations
     const purchaseMutation = usePurchasePackage();
     const bookClassMutation = useBookClass();
+    const joinWaitlistMutation = useJoinWaitlist();
+    const leaveWaitlistMutation = useLeaveWaitlist();
     const cancelBookingMutation = useCancelBooking();
     const rescheduleBookingMutation = useRescheduleBooking();
 
@@ -100,6 +106,7 @@ export const useZenPortal = () => {
     const [postAuthPath, setPostAuthPath] = useState<string | null>(null);
     const [rescheduleFromBookingId, setRescheduleFromBookingId] = useState<string | null>(null);
     const [selectedBookingPackageId, setSelectedBookingPackageId] = useState<string>("");
+    const [waitlistActionScheduleId, setWaitlistActionScheduleId] = useState<string | null>(null);
 
     // Persistence Effects
     useEffect(() => {
@@ -593,6 +600,18 @@ export const useZenPortal = () => {
         return membershipPackages.map(({ expiresAt, ...rest }) => rest);
     }, [selectedClassType, activePackages, membershipCreditsByPackage, nonMembershipRecoveryBenefitsByPackage]);
 
+    const activeWaitlistBySchedule = useMemo(() => {
+        const map: Record<string, { id: string; position: number }> = {};
+        if (!apiWaitlist) return map;
+
+        for (const entry of apiWaitlist) {
+            if (entry.status !== "waiting") continue;
+            map[entry.schedule_id] = { id: entry.id, position: entry.position };
+        }
+
+        return map;
+    }, [apiWaitlist]);
+
     useEffect(() => {
         if (eligibleBookingPackages.length === 0) {
             if (selectedBookingPackageId) setSelectedBookingPackageId("");
@@ -915,6 +934,53 @@ export const useZenPortal = () => {
         }
     };
 
+    const handleJoinWaitlist = async (scheduleId: string) => {
+        if (!customer) {
+            requireAuth("/book");
+            return;
+        }
+
+        const chosenEligible = eligibleBookingPackages.find((p) => p.id === selectedBookingPackageId) || eligibleBookingPackages[0];
+        if (!chosenEligible) {
+            toast.error("You need an eligible active package to join this waitlist.");
+            setAccountTab("packages");
+            return;
+        }
+
+        setWaitlistActionScheduleId(scheduleId);
+        try {
+            await joinWaitlistMutation.mutateAsync({
+                schedule_id: scheduleId,
+                user_package_id: chosenEligible.id,
+            });
+            toast.success("Joined waitlist successfully.");
+        } catch (err: any) {
+            const message = err?.body?.message || err?.message || "Failed to join waitlist.";
+            toast.error(message);
+        } finally {
+            setWaitlistActionScheduleId(null);
+        }
+    };
+
+    const handleLeaveWaitlistBySchedule = async (scheduleId: string) => {
+        const entry = activeWaitlistBySchedule[scheduleId];
+        if (!entry) {
+            toast.error("No active waitlist entry found for this session.");
+            return;
+        }
+
+        setWaitlistActionScheduleId(scheduleId);
+        try {
+            await leaveWaitlistMutation.mutateAsync(entry.id);
+            toast.success("Left waitlist.");
+        } catch (err: any) {
+            const message = err?.body?.message || err?.message || "Failed to leave waitlist.";
+            toast.error(message);
+        } finally {
+            setWaitlistActionScheduleId(null);
+        }
+    };
+
     const canReschedule = (booking: BookedClass) => {
         if (booking.status !== "confirmed") return false;
         const timeStr = booking.time.split(" – ")[0];
@@ -924,6 +990,17 @@ export const useZenPortal = () => {
     };
 
     const isBookingLoading = bookClassMutation.isPending || rescheduleBookingMutation.isPending;
+    const isCustomerDataLoading = isAuthenticated && (
+        auth.loading
+        || auth.profileLoading
+        || isPackagesLoading
+        || isBookingsLoading
+        || isWaitlistLoading
+        || isLoyaltyLoading
+        || isLoyaltyHistoryLoading
+        || isPaymentsLoading
+        || isStatsLoading
+    );
 
     const handleStartReschedule = async (bookingId: string) => {
         setRescheduleFromBookingId(bookingId);
@@ -996,7 +1073,14 @@ export const useZenPortal = () => {
         selectedSlots,
         handleSelectTime,
         handleCompleteBooking,
+        myWaitlistEntries: apiWaitlist ?? [],
+        activeWaitlistBySchedule,
+        isWaitlistLoading: joinWaitlistMutation.isPending || leaveWaitlistMutation.isPending,
+        waitlistActionScheduleId,
+        handleJoinWaitlist,
+        handleLeaveWaitlistBySchedule,
         isBookingLoading,
+        isCustomerDataLoading,
         sessionsRemaining,
         sessionsByType,
         membershipCreditsByPackage,

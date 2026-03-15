@@ -12,7 +12,7 @@ import { toast } from "@repo/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui";
 import { classTypes } from "@repo/store";
 import { AccountTab, PurchasedPackage, BookedClass, PaymentRecord } from "@/types/zen-portal.ts";
-import type { LoyaltyInfo, CustomerStats } from "@/hooks/use-customer-api";
+import type { LoyaltyInfo, CustomerStats, CustomerWaitlistEntry } from "@/hooks/use-customer-api";
 import { useUpdateProfile } from "@/hooks/use-customer-api";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -42,6 +42,14 @@ interface AccountPageProps {
     selectedSlots: any[];
     handleSelectTime: (slot: any) => void;
     handleCompleteBooking: () => void;
+    isBookingLoading: boolean;
+    myWaitlistEntries: CustomerWaitlistEntry[];
+    activeWaitlistBySchedule: Record<string, { id: string; position: number }>;
+    isWaitlistLoading: boolean;
+    waitlistActionScheduleId: string | null;
+    handleJoinWaitlist: (scheduleId: string) => Promise<void>;
+    handleLeaveWaitlistBySchedule: (scheduleId: string) => Promise<void>;
+    isCustomerDataLoading?: boolean;
     sessionsRemaining: number;
     sessionsByType: Record<string, number>;
     membershipCreditsByPackage: Record<string, { classRemaining: number; recoveryRemaining: number }>;
@@ -76,6 +84,14 @@ const AccountPage: React.FC<AccountPageProps> = ({
     selectedSlots,
     handleSelectTime,
     handleCompleteBooking,
+    isBookingLoading,
+    myWaitlistEntries,
+    activeWaitlistBySchedule,
+    isWaitlistLoading,
+    waitlistActionScheduleId,
+    handleJoinWaitlist,
+    handleLeaveWaitlistBySchedule,
+    isCustomerDataLoading = false,
     sessionsRemaining: totalSessionsRemaining,
     sessionsByType,
     membershipCreditsByPackage,
@@ -215,6 +231,39 @@ const AccountPage: React.FC<AccountPageProps> = ({
         { id: "payments", label: t('payments'), icon: CreditCard },
         { id: "profile", label: t('profile'), icon: ShieldCheck },
     ];
+
+    if (isCustomerDataLoading) {
+        return (
+            <div className="flex flex-col gap-6 animate-in fade-in duration-300 pb-10">
+                <div className="relative overflow-hidden rounded-[2rem] bg-card border border-border p-6 shadow-sm animate-pulse">
+                    <div className="relative flex items-center gap-5">
+                        <div className="h-20 w-20 rounded-full bg-muted/60 border border-border" />
+                        <div className="flex-1 space-y-2">
+                            <div className="h-8 w-52 rounded-xl bg-muted/60" />
+                            <div className="h-4 w-72 rounded-lg bg-muted/50" />
+                        </div>
+                        <div className="h-10 w-10 rounded-xl bg-muted/50" />
+                    </div>
+                </div>
+
+                <div className="flex gap-2 p-1 bg-muted/30 rounded-2xl overflow-x-auto no-scrollbar">
+                    {[...Array(6)].map((_, i) => (
+                        <div key={i} className="h-11 w-24 rounded-xl bg-muted/60 animate-pulse flex-shrink-0" />
+                    ))}
+                </div>
+
+                <div className="space-y-4">
+                    {[...Array(4)].map((_, i) => (
+                        <div key={i} className="rounded-2xl border border-border bg-card p-5 animate-pulse space-y-3">
+                            <div className="h-4 w-48 rounded bg-muted/60" />
+                            <div className="h-3 w-full rounded bg-muted/50" />
+                            <div className="h-3 w-4/5 rounded bg-muted/50" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col gap-6 animate-in fade-in duration-500 pb-10">
@@ -720,6 +769,50 @@ const AccountPage: React.FC<AccountPageProps> = ({
                             ))}
                         </div>
 
+                        {/* Waitlist Queue Section */}
+                        {myWaitlistEntries.filter(e => e.status === "waiting").length > 0 && (
+                            <div className="space-y-4">
+                                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2 px-2">
+                                    <Users size={14} className="text-amber-500" /> Waitlist Queue
+                                </h3>
+                                {myWaitlistEntries
+                                    .filter(e => e.status === "waiting")
+                                    .sort((a, b) => a.position - b.position)
+                                    .map((entry) => {
+                                        const busy = isWaitlistLoading && waitlistActionScheduleId === entry.schedule_id;
+                                        const schedDate = entry.schedule?.class_date
+                                            ? new Date(entry.schedule.class_date).toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })
+                                            : "—";
+                                        return (
+                                            <div key={entry.id} className="rounded-[2rem] border border-amber-200/60 bg-amber-50/40 p-5 flex justify-between items-center gap-4">
+                                                <div className="space-y-1 text-left">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 uppercase tracking-widest border border-amber-200">
+                                                            #{entry.position} in queue
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm font-bold text-foreground">
+                                                        {entry.schedule?.service_type?.name ?? "Class"}
+                                                    </p>
+                                                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                                                        {schedDate}
+                                                        {entry.schedule?.start_time ? ` · ${entry.schedule.start_time}` : ""}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleLeaveWaitlistBySchedule(entry.schedule_id)}
+                                                    disabled={busy}
+                                                    className="flex-shrink-0 h-9 rounded-xl px-3 text-[9px] font-black uppercase tracking-wider border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors inline-flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                >
+                                                    {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                                                    Leave
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+                        )}
+
                         {/* Policy Reminder */}
                         <div className="bg-white/40 backdrop-blur-md rounded-[2rem] p-6 border border-white/40 shadow-sm flex items-center gap-4">
                             <div className="h-10 w-10 flex-shrink-0 bg-primary/10 text-primary flex items-center justify-center rounded-xl">
@@ -879,11 +972,15 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                             const isAlreadyBooked = bookedClasses.some(
                                                 b => b.scheduleId === slot.id && b.status === "confirmed"
                                             );
+                                            const waitlistEntry = activeWaitlistBySchedule[slot.id];
+                                            const isWaitlisted = !!waitlistEntry;
+                                            const waitlistBusy = isWaitlistLoading && waitlistActionScheduleId === slot.id;
                                             return (
-                                                <button
+                                                <div
                                                     key={slot.id}
-                                                    disabled={isFull || isAlreadyBooked}
-                                                    onClick={() => handleSelectTime(slot)}
+                                                    onClick={() => {
+                                                        if (!isFull && !isAlreadyBooked) handleSelectTime(slot);
+                                                    }}
                                                     className={cn(
                                                         "w-full p-5 rounded-3xl border transition-all text-left flex justify-between items-center group",
                                                         isSelected ? "bg-matcha text-white border-matcha shadow-lg" : "bg-white/40 border-white/60 text-zen-dark",
@@ -899,8 +996,38 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                                             <Users className="w-3 h-3" />
                                                             {isFull ? t('fully_booked') : `${slot.enrolled}/${slot.capacity} ${t('booked')}`}
                                                         </div>
+                                                        {isWaitlisted && (
+                                                            <div className="text-[9px] font-black uppercase tracking-wider text-primary">
+                                                                Waitlist position #{waitlistEntry.position}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    {isAlreadyBooked ? (
+                                                    {isFull ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    if (isWaitlisted) {
+                                                                        handleLeaveWaitlistBySchedule(slot.id);
+                                                                    } else {
+                                                                        handleJoinWaitlist(slot.id);
+                                                                    }
+                                                                }}
+                                                                disabled={waitlistBusy}
+                                                                className={cn(
+                                                                    "h-10 rounded-xl px-3 text-[9px] font-black uppercase tracking-wider border transition-colors inline-flex items-center gap-1.5",
+                                                                    isWaitlisted
+                                                                        ? "border-destructive/30 text-destructive hover:bg-destructive/10"
+                                                                        : "border-primary/30 text-primary hover:bg-primary/10",
+                                                                    waitlistBusy && "opacity-60 cursor-not-allowed"
+                                                                )}
+                                                            >
+                                                                {waitlistBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                                                                {isWaitlisted ? "Leave Waitlist" : "Join Waitlist"}
+                                                            </button>
+                                                        </div>
+                                                    ) : isAlreadyBooked ? (
                                                         <div className="flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
                                                             <CheckCircle2 className="w-3 h-3" />
                                                             Booked
@@ -910,7 +1037,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                                             {isSelected ? <CheckCircle2 className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
                                                         </div>
                                                     )}
-                                                </button>
+                                                </div>
                                             );
                                         })
                                     ) : (
@@ -923,9 +1050,11 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                 {selectedSlots.length > 0 && (
                                     <button
                                         onClick={handleCompleteBooking}
-                                        className="w-full py-5 bg-matcha text-white rounded-3xl font-black uppercase tracking-widest shadow-xl shadow-matcha/30 animate-in slide-in-from-bottom-4"
+                                        disabled={isBookingLoading}
+                                        className="w-full py-5 bg-matcha text-white rounded-3xl font-black uppercase tracking-widest shadow-xl shadow-matcha/30 animate-in slide-in-from-bottom-4 disabled:opacity-70 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                                     >
-                                        {t('confirm_booking')} ({selectedSlots.length})
+                                        {isBookingLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                                        {isBookingLoading ? t('confirming_booking') : `${t('confirm_booking')} (${selectedSlots.length})`}
                                     </button>
                                 )}
 

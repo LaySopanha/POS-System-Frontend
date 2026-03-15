@@ -65,7 +65,14 @@ const ZenHome = () => {
     selectedSlots,
     handleSelectTime,
     handleCompleteBooking,
+    myWaitlistEntries,
+    activeWaitlistBySchedule,
+    isWaitlistLoading,
+    waitlistActionScheduleId,
+    handleJoinWaitlist,
+    handleLeaveWaitlistBySchedule,
     isBookingLoading,
+    isCustomerDataLoading,
     sessionsRemaining,
     sessionsByType,
     membershipCreditsByPackage,
@@ -209,7 +216,15 @@ const ZenHome = () => {
             selectedSlots={selectedSlots}
             handleSelectTime={handleSelectTime}
             handleCompleteBooking={handleCompleteBooking}
+            isBookingLoading={isBookingLoading}
+            myWaitlistEntries={myWaitlistEntries}
+            activeWaitlistBySchedule={activeWaitlistBySchedule}
+            isWaitlistLoading={isWaitlistLoading}
+            waitlistActionScheduleId={waitlistActionScheduleId}
+            handleJoinWaitlist={handleJoinWaitlist}
+            handleLeaveWaitlistBySchedule={handleLeaveWaitlistBySchedule}
             sessionsRemaining={sessionsRemaining}
+            isCustomerDataLoading={isCustomerDataLoading}
             sessionsByType={sessionsByType}
             membershipCreditsByPackage={membershipCreditsByPackage}
             nonMembershipRecoveryBenefitsByPackage={nonMembershipRecoveryBenefitsByPackage}
