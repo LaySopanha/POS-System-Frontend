@@ -169,23 +169,33 @@ export const useZenPortal = () => {
         return 0;
     };
 
-    const parseRecoveryPurchaseDiscountPercent = (benefits: unknown): number => {
-        if (!Array.isArray(benefits)) return 0;
+    const parseRecoveryPurchaseDiscountPercent = (benefits: unknown): { percent: number; limit: number } => {
+        if (!Array.isArray(benefits)) return { percent: 0, limit: 0 };
 
         let maxPercent = 0;
+        let associatedLimit = 0;
         for (const item of benefits) {
             if (typeof item !== "string") continue;
             const text = item.toLowerCase();
             if (!text.includes("recovery")) continue;
 
-            const match = text.match(/(\d+)\s*%\s*off/) || text.match(/off\s*(\d+)\s*%/);
+            const match = text.match(/(\d+)\s*%\s*(?:off|of)/) || text.match(/(?:off|of)\s*(\d+)\s*%/);
             if (!match) continue;
 
             const percent = Math.max(0, Math.min(100, Number(match[1] || 0)));
-            if (percent > maxPercent) maxPercent = percent;
+            if (percent > maxPercent) {
+                maxPercent = percent;
+                // Try to find a limit, e.g. "of 22 recovery"
+                const limitMatch = text.match(/(?:off|of)\s*(\d+)\s*recovery/);
+                if (limitMatch) {
+                    associatedLimit = Number(limitMatch[1]);
+                } else {
+                    associatedLimit = 0; // 0 means unlimited
+                }
+            }
         }
 
-        return maxPercent;
+        return { percent: maxPercent, limit: associatedLimit };
     };
 
     const bookingUsageByPackage = useMemo(() => {
@@ -339,13 +349,13 @@ export const useZenPortal = () => {
 
             const usage = bookingUsageByPackage[up.id] || { total: 0, class: 0, recovery: 0 };
             const freeRecoveryTotal = parsePackageBenefitValue(up.package?.benefits, /(\d+)\s*free.*recovery/i);
-            const discountPercent = parsePackageBenefitValue(up.package?.benefits, /(\d+)\s*%\s*off/i);
-            const discountedRecoveryTotal = parsePackageBenefitValue(up.package?.benefits, /(\d+)\s*recovery\s*sessions?/i);
+            
+            const { percent: discountPercent, limit: discountedRecoveryTotal } = parseRecoveryPurchaseDiscountPercent(up.package?.benefits);
 
             benefitsByPackage[up.id] = {
                 freeRecoveryRemaining: Math.max(0, freeRecoveryTotal - usage.recovery),
                 discountPercent,
-                discountedRecoveryRemaining: Math.max(0, discountedRecoveryTotal - usage.recovery),
+                discountedRecoveryRemaining: discountedRecoveryTotal === 0 ? Infinity : Math.max(0, discountedRecoveryTotal - usage.recovery),
             };
         }
 
@@ -366,7 +376,15 @@ export const useZenPortal = () => {
             const isExpired = expiryMs !== null && expiryMs < now;
             if (!isActiveStatus || !isConfirmed || isExpired) continue;
 
-            const percent = parseRecoveryPurchaseDiscountPercent(up.package?.benefits);
+            const { percent, limit } = parseRecoveryPurchaseDiscountPercent(up.package?.benefits);
+            if (percent === 0) continue;
+            
+            // Check usage limit if one exists
+            if (limit > 0) {
+                const usage = bookingUsageByPackage[up.id]?.recovery || 0;
+                if (usage >= limit) continue; // They used all their discounted sessions
+            }
+
             if (percent > bestPercent) {
                 bestPercent = percent;
                 sourcePackageName = up.package?.name || "Active package";
@@ -374,7 +392,7 @@ export const useZenPortal = () => {
         }
 
         return { percent: bestPercent, sourcePackageName };
-    }, [apiPackages]);
+    }, [apiPackages, bookingUsageByPackage]);
 
     const getDiscountedPackagePrice = (item: ClassPackage | MembershipPlan): number => {
         const basePrice = Number((item as any).price || 0);

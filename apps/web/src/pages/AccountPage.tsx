@@ -551,7 +551,10 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                                             <p className="text-[9px] font-black text-matcha uppercase tracking-wider">Free recovery left: {nonMembershipRecoveryBenefitsByPackage[pkg.id].freeRecoveryRemaining}</p>
                                                         )}
                                                         {(nonMembershipRecoveryBenefitsByPackage[pkg.id].discountPercent || 0) > 0 && (
-                                                            <p className="text-[9px] font-black text-primary uppercase tracking-wider">Recovery discount: {nonMembershipRecoveryBenefitsByPackage[pkg.id].discountPercent}%</p>
+                                                            <p className="text-[9px] font-black text-primary uppercase tracking-wider">
+                                                                Recovery discount: {nonMembershipRecoveryBenefitsByPackage[pkg.id].discountPercent}%
+                                                                {nonMembershipRecoveryBenefitsByPackage[pkg.id].discountedRecoveryRemaining !== Infinity && ` (${nonMembershipRecoveryBenefitsByPackage[pkg.id].discountedRecoveryRemaining} left)`}
+                                                            </p>
                                                         )}
                                                     </div>
                                                 )}
