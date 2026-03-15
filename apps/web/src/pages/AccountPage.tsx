@@ -104,6 +104,8 @@ const AccountPage: React.FC<AccountPageProps> = ({
     const [expandedBookingId, setExpandedBookingId] = React.useState<string | null>(null);
     const [bookingActionLoading, setBookingActionLoading] = React.useState<{ id: string; action: "cancel" | "reschedule" } | null>(null);
     const [pendingBookingAction, setPendingBookingAction] = React.useState<{ action: "cancel" | "reschedule"; booking: BookedClass } | null>(null);
+    const [visiblePastPackages, setVisiblePastPackages] = React.useState(6);
+    const [visiblePreviousBookings, setVisiblePreviousBookings] = React.useState(6);
     // Profile editing state
     const [isEditingProfile, setIsEditingProfile] = React.useState(false);
     const [profileForm, setProfileForm] = React.useState<{
@@ -172,6 +174,22 @@ const AccountPage: React.FC<AccountPageProps> = ({
         const d = new Date(dateStr);
         return d.toLocaleDateString(i18n.language === 'km' ? 'km-KH' : 'en-US', {
             weekday: 'long',
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    };
+
+    const formatPackageHistoryDate = (pkg: PurchasedPackage) => {
+        const rawDate = pkg.expiresAt || pkg.startedAt || pkg.purchasedAt;
+        if (!rawDate) return "Date unavailable";
+
+        const d = new Date(rawDate);
+        if (Number.isNaN(d.getTime())) {
+            return rawDate.split('T')[0] || rawDate;
+        }
+
+        return d.toLocaleDateString(i18n.language === 'km' ? 'km-KH' : 'en-US', {
             month: 'short',
             day: 'numeric',
             year: 'numeric'
@@ -598,17 +616,25 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                 <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2 px-2">
                                     <History size={14} /> {t('past_history')}
                                 </h3>
-                                {pastPkgs.map((pkg) => (
+                                {pastPkgs.slice(0, visiblePastPackages).map((pkg) => (
                                     <div key={pkg.id} className="rounded-2xl border border-border bg-card/60 p-4 flex justify-between items-center text-left">
                                         <div>
                                             <h4 className="text-sm font-bold text-foreground">{pkg.packageName}</h4>
-                                            <p className="text-[10px] text-muted-foreground">{pkg.validity} · {t('full_used')}</p>
+                                            <p className="text-[10px] text-muted-foreground">{formatPackageHistoryDate(pkg)} · {pkg.validity} · {t('full_used')}</p>
                                         </div>
                                         <div className="h-10 w-10 flex items-center justify-center rounded-full bg-muted/50">
                                             <CheckCircle2 size={16} className="text-muted-foreground" />
                                         </div>
                                     </div>
                                 ))}
+                                {pastPkgs.length > visiblePastPackages && (
+                                    <button
+                                        onClick={() => setVisiblePastPackages((v) => v + 6)}
+                                        className="w-full py-3 rounded-xl border border-border bg-card/70 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-card transition-colors"
+                                    >
+                                        Load More History
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -726,7 +752,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2 px-2">
                                 <History size={14} /> {t('previous_record')}
                             </h3>
-                            {previousBookings.map((booking) => (
+                            {previousBookings.slice(0, visiblePreviousBookings).map((booking) => (
                                 <div key={booking.id} className="rounded-2xl border border-border bg-card/40 p-5 flex flex-col gap-4 group hover:border-border transition-colors">
                                     <div className="flex justify-between items-center">
                                         <div className="text-left space-y-0.5">
@@ -767,6 +793,14 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                     </div>
                                 </div>
                             ))}
+                            {previousBookings.length > visiblePreviousBookings && (
+                                <button
+                                    onClick={() => setVisiblePreviousBookings((v) => v + 6)}
+                                    className="w-full py-3 rounded-xl border border-border bg-card/70 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-card transition-colors"
+                                >
+                                    Load More History
+                                </button>
+                            )}
                         </div>
 
                         {/* Waitlist Queue Section */}
