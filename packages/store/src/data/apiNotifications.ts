@@ -48,8 +48,27 @@ export function useMarkAdminNotificationRead() {
                     `/admin/notifications/${id}/read`
                 )
                 .then((r) => r.data),
-        onSuccess: () =>
-            qc.invalidateQueries({ queryKey: adminNotificationQueryKeys.all }),
+        onMutate: async (id: string) => {
+            await qc.cancelQueries({ queryKey: adminNotificationQueryKeys.all });
+            const previous = qc.getQueriesData<AdminNotification[]>({
+                queryKey: adminNotificationQueryKeys.all,
+            });
+            previous.forEach(([key, old]) => {
+                if (!old) return;
+                qc.setQueryData<AdminNotification[]>(key, old.map((n) =>
+                    n.id === id ? { ...n, read: true } : n
+                ));
+            });
+            return { previous };
+        },
+        onError: (_err, _id, context) => {
+            context?.previous.forEach(([key, old]) => {
+                if (old) qc.setQueryData(key, old);
+            });
+        },
+        onSettled: () => {
+            qc.invalidateQueries({ queryKey: adminNotificationQueryKeys.all });
+        },
     });
 }
 
@@ -60,8 +79,25 @@ export function useMarkAllAdminNotificationsRead() {
             api
                 .put<{ message: string }>("/admin/notifications/read-all")
                 .then((r) => r),
-        onSuccess: () =>
-            qc.invalidateQueries({ queryKey: adminNotificationQueryKeys.all }),
+        onMutate: async () => {
+            await qc.cancelQueries({ queryKey: adminNotificationQueryKeys.all });
+            const previous = qc.getQueriesData<AdminNotification[]>({
+                queryKey: adminNotificationQueryKeys.all,
+            });
+            previous.forEach(([key, old]) => {
+                if (!old) return;
+                qc.setQueryData<AdminNotification[]>(key, old.map((n) => ({ ...n, read: true })));
+            });
+            return { previous };
+        },
+        onError: (_err, _vars, context) => {
+            context?.previous.forEach(([key, old]) => {
+                if (old) qc.setQueryData(key, old);
+            });
+        },
+        onSettled: () => {
+            qc.invalidateQueries({ queryKey: adminNotificationQueryKeys.all });
+        },
     });
 }
 
