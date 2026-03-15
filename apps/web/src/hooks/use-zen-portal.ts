@@ -919,6 +919,19 @@ export const useZenPortal = () => {
                 await bookClassMutation.mutateAsync({
                     schedule_id: slot.id,
                     user_package_id: activePkg.id,
+                    schedule: {
+                        id: slot.id,
+                        class_date: slot.date,
+                        start_time: slot.startTime,
+                        end_time: slot.endTime,
+                        location_note: slot.description ?? "",
+                        instructor_name: slot.instructor?.name ?? "Instructor",
+                        service_type: {
+                            id: slot.classTypeId,
+                            name: slot.name,
+                            description: slot.description ?? "",
+                        },
+                    },
                 });
             }
 

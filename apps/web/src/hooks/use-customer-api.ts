@@ -80,10 +80,9 @@ export interface CustomerWaitlistEntry {
         start_time: string;
         end_time: string;
         location_note: string | null;
-        service_type?: {
-            id: string;
-            name: string;
-        };
+        service_type?: { id: string; name: string };
+        /** Laravel relation name (camelCase) */
+        serviceType?: { id: string; name: string };
     };
 }
 
@@ -186,19 +185,88 @@ export function useBookClass() {
         mutationFn: (data: {
             schedule_id: string;
             user_package_id: string;
+            schedule?: WellnessBooking["schedule"]; // used only for optimistic UI
         }) =>
             api.post<{ message: string; data: WellnessBooking }>(
                 "/customer/bookings",
-                data
+                {
+                    schedule_id: data.schedule_id,
+                    user_package_id: data.user_package_id,
+                }
             ),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["customer", "bookings"] });
-            queryClient.invalidateQueries({ queryKey: ["customer", "packages"] });
-            queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });
+        // Optimistic update so bookings + packages update instantly
+        onMutate: async (variables) => {
+            await Promise.all([
+                queryClient.cancelQueries({ queryKey: ["customer", "bookings"] }),
+                queryClient.cancelQueries({ queryKey: ["customer", "packages"] }),
+                queryClient.cancelQueries({ queryKey: ["wellness", "schedule"] }),
+            ]);
+
+            const previousBookings = queryClient.getQueryData<WellnessBooking[]>(["customer", "bookings"]);
+            const previousPackages = queryClient.getQueryData<UserPackage[]>(["customer", "packages"]);
+
+            const nowIso = new Date().toISOString();
+            const optimisticBooking: WellnessBooking = {
+                id: `optimistic-${Date.now()}`,
+                user_id: "me",
+                user_package_id: variables.user_package_id,
+                schedule_id: variables.schedule_id,
+                booking_reference: "PENDING",
+                status: "confirmed",
+                booked_at: nowIso,
+                can_reschedule_until: null,
+                cancelled_at: null,
+                cancellation_reason: null,
+                schedule: variables.schedule ?? {
+                    id: variables.schedule_id,
+                    class_date: nowIso.split("T")[0],
+                    start_time: "",
+                    end_time: "",
+                    location_note: null,
+                    instructor_name: null,
+                    service_type: {
+                        id: "",
+                        name: "Class",
+                        description: null,
+                    },
+                },
+                user_package: {
+                    id: variables.user_package_id,
+                    package: {
+                        id: variables.user_package_id,
+                        name: "Package",
+                    },
+                },
+            };
+
+            if (previousBookings) {
+                queryClient.setQueryData<WellnessBooking[]>(["customer", "bookings"], [
+                    ...previousBookings,
+                    optimisticBooking,
+                ]);
+            }
+
+            if (previousPackages) {
+                queryClient.setQueryData<UserPackage[]>(["customer", "packages"], prev =>
+                    (prev ?? []).map((pkg) =>
+                        pkg.id === variables.user_package_id && pkg.sessions_remaining !== null
+                            ? { ...pkg, sessions_remaining: Math.max(0, pkg.sessions_remaining - 1) }
+                            : pkg
+                    )
+                );
+            }
+
+            return { previousBookings, previousPackages };
         },
-        onError: () => {
-            // Backend may complete booking but fail on side effects (e.g., SMTP).
-            // Refetch to keep UI consistent with server state.
+        onError: (_err, _vars, context) => {
+            if (context?.previousBookings) {
+                queryClient.setQueryData(["customer", "bookings"], context.previousBookings);
+            }
+            if (context?.previousPackages) {
+                queryClient.setQueryData(["customer", "packages"], context.previousPackages);
+            }
+        },
+        onSettled: () => {
             queryClient.invalidateQueries({ queryKey: ["customer", "bookings"] });
             queryClient.invalidateQueries({ queryKey: ["customer", "packages"] });
             queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });
@@ -224,7 +292,48 @@ export function useCancelBooking() {
                 `/customer/bookings/${bookingId}/cancel`,
                 reason ? { reason } : undefined
             ),
-        onSuccess: () => {
+        // Optimistic removal so the class disappears instantly from My Classes
+        onMutate: async ({ bookingId }) => {
+            await Promise.all([
+                queryClient.cancelQueries({ queryKey: ["customer", "bookings"] }),
+                queryClient.cancelQueries({ queryKey: ["customer", "packages"] }),
+                queryClient.cancelQueries({ queryKey: ["wellness", "schedule"] }),
+            ]);
+
+            const previousBookings = queryClient.getQueryData<WellnessBooking[]>(["customer", "bookings"]);
+            const previousPackages = queryClient.getQueryData<UserPackage[]>(["customer", "packages"]);
+
+            let affectedPackageId: string | null = null;
+            if (previousBookings) {
+                const booking = previousBookings.find(b => b.id === bookingId);
+                affectedPackageId = booking?.user_package_id ?? null;
+
+                queryClient.setQueryData<WellnessBooking[]>(["customer", "bookings"],
+                    previousBookings.filter(b => b.id !== bookingId)
+                );
+            }
+
+            if (previousPackages && affectedPackageId) {
+                queryClient.setQueryData<UserPackage[]>(["customer", "packages"], prev =>
+                    (prev ?? []).map(pkg =>
+                        pkg.id === affectedPackageId && pkg.sessions_remaining !== null
+                            ? { ...pkg, sessions_remaining: pkg.sessions_remaining + 1 }
+                            : pkg
+                    )
+                );
+            }
+
+            return { previousBookings, previousPackages };
+        },
+        onError: (_err, _vars, context) => {
+            if (context?.previousBookings) {
+                queryClient.setQueryData(["customer", "bookings"], context.previousBookings);
+            }
+            if (context?.previousPackages) {
+                queryClient.setQueryData(["customer", "packages"], context.previousPackages);
+            }
+        },
+        onSettled: () => {
             queryClient.invalidateQueries({ queryKey: ["customer", "bookings"] });
             queryClient.invalidateQueries({ queryKey: ["customer", "packages"] });
             queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });

@@ -807,49 +807,57 @@ const AccountPage: React.FC<AccountPageProps> = ({
                             )}
                         </div>
 
-                        {/* Waitlist Queue Section */}
-                        {myWaitlistEntries.filter(e => e.status === "waiting").length > 0 && (
-                            <div className="space-y-4">
-                                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2 px-2">
-                                    <Users size={14} className="text-amber-500" /> Waitlist Queue
-                                </h3>
-                                {myWaitlistEntries
-                                    .filter(e => e.status === "waiting")
-                                    .sort((a, b) => a.position - b.position)
-                                    .map((entry) => {
-                                        const busy = isWaitlistLoading && waitlistActionScheduleId === entry.schedule_id;
-                                        const schedDate = entry.schedule?.class_date
-                                            ? new Date(entry.schedule.class_date).toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })
-                                            : "—";
-                                        return (
-                                            <div key={entry.id} className="rounded-[2rem] border border-amber-200/60 bg-amber-50/40 p-5 flex justify-between items-center gap-4">
-                                                <div className="space-y-1 text-left">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 uppercase tracking-widest border border-amber-200">
-                                                            #{entry.position} in queue
-                                                        </span>
+                        {/* Waitlist Queue Section — always visible so the feature is discoverable */}
+                        <div className="space-y-4">
+                            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2 px-2">
+                                <Users size={14} className="text-amber-500" /> Waitlist Queue
+                            </h3>
+                            {myWaitlistEntries.filter(e => e.status === "waiting").length > 0 ? (
+                                <>
+                                    {myWaitlistEntries
+                                        .filter(e => e.status === "waiting")
+                                        .sort((a, b) => a.position - b.position)
+                                        .map((entry) => {
+                                            const busy = isWaitlistLoading && waitlistActionScheduleId === entry.schedule_id;
+                                            const schedDate = entry.schedule?.class_date
+                                                ? new Date(entry.schedule.class_date).toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })
+                                                : "—";
+                                            const className = entry.schedule?.service_type?.name ?? entry.schedule?.serviceType?.name ?? "Class";
+                                            return (
+                                                <div key={entry.id} className="rounded-[2rem] border border-amber-200/60 bg-amber-50/40 p-5 flex justify-between items-center gap-4">
+                                                    <div className="space-y-1 text-left">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 uppercase tracking-widest border border-amber-200">
+                                                                #{entry.position} in queue
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm font-bold text-foreground">
+                                                            {className}
+                                                        </p>
+                                                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                                                            {schedDate}
+                                                            {entry.schedule?.start_time ? ` · ${entry.schedule.start_time}` : ""}
+                                                        </p>
                                                     </div>
-                                                    <p className="text-sm font-bold text-foreground">
-                                                        {entry.schedule?.service_type?.name ?? "Class"}
-                                                    </p>
-                                                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                                                        {schedDate}
-                                                        {entry.schedule?.start_time ? ` · ${entry.schedule.start_time}` : ""}
-                                                    </p>
+                                                    <button
+                                                        onClick={() => handleLeaveWaitlistBySchedule(entry.schedule_id)}
+                                                        disabled={busy}
+                                                        className="flex-shrink-0 h-9 rounded-xl px-3 text-[9px] font-black uppercase tracking-wider border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors inline-flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                    >
+                                                        {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                                                        Leave
+                                                    </button>
                                                 </div>
-                                                <button
-                                                    onClick={() => handleLeaveWaitlistBySchedule(entry.schedule_id)}
-                                                    disabled={busy}
-                                                    className="flex-shrink-0 h-9 rounded-xl px-3 text-[9px] font-black uppercase tracking-wider border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors inline-flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
-                                                >
-                                                    {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                                                    Leave
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
-                            </div>
-                        )}
+                                            );
+                                        })}
+                                </>
+                            ) : (
+                                <div className="rounded-[2rem] border border-dashed border-amber-200/60 bg-amber-50/20 p-5 text-center">
+                                    <p className="text-sm text-muted-foreground">You&apos;re not on any waitlist.</p>
+                                    <p className="text-[10px] text-muted-foreground mt-1">When a class is full, you can join the waitlist from Book a Session.</p>
+                                </div>
+                            )}
+                        </div>
 
                         {/* Policy Reminder */}
                         <div className="bg-white/40 backdrop-blur-md rounded-[2rem] p-6 border border-white/40 shadow-sm flex items-center gap-4">
