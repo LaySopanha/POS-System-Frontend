@@ -1,6 +1,7 @@
 import { useZenPortal } from "@/hooks/use-zen-portal";
 import StepHeader from "@/components/ZenPortal/StepHeader";
 import { RefreshCw } from "lucide-react";
+import { useEffect } from "react";
 
 // Page Components
 import HomePage from "@/pages/HomePage";
@@ -15,6 +16,8 @@ import NewbieGuidePage from "@/pages/NewbieGuidePage";
 import ContactUsPage from "@/pages/ContactUsPage";
 import SuccessPage from "./SuccessPage";
 import EmailConfirmScreen from "./EmailConfirmScreen";
+import EmailNotConfirmedScreen from "./EmailNotConfirmedScreen";
+import { useAuth } from "@/hooks/use-auth";
 
 const ZenHome = () => {
   const {
@@ -96,8 +99,24 @@ const ZenHome = () => {
     t
   } = useZenPortal();
 
+  const authCtx = useAuth();
+  
+  // If the user arrives with an access token in the hash (Supabase email confirmation redirect), 
+  // they are now verified. Let's make sure they aren't trapped on the confirm-email route
+  // if they were originally pending.
+  useEffect(() => {
+    if (location.hash.includes("access_token=") || location.hash.includes("type=signup")) {
+      if (pendingConfirmEmail) {
+        // Clear pending so it reveals the app / success toaster handles the rest
+        // We use navigate to strip the hash if we want, but AuthCtx already handles reading it
+        navigate("/", { replace: true });
+      }
+    }
+  }, [location.hash, pendingConfirmEmail, navigate]);
+
   // ── Early return for email confirmation screen ──────────────────────────────
-  // Render it in full isolation so nothing else shows behind it
+  // Render it in full isolation so nothing else shows behind it. 
+  // MUST be placed AFTER all hooks to prevent "Rendered fewer hooks than expected"
   if (location.pathname === "/confirm-email" && pendingConfirmEmail) {
     return (
       <div className="min-h-screen bg-off-white">
@@ -110,8 +129,12 @@ const ZenHome = () => {
     );
   }
 
+
+
   return (
     <div className="min-h-screen bg-off-white">
+      {authCtx.emailNotConfirmed && <EmailNotConfirmedScreen />}
+
       <StepHeader
         step={step}
         stepTitle={stepTitle}

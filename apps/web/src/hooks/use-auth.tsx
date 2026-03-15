@@ -8,6 +8,7 @@ import {
     onAuthStateChange,
     api,
     getAccessToken,
+    refreshAccessToken,
 } from "@repo/store";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ interface AuthState {
     profile: CustomerProfile | null;
     loading: boolean;
     profileLoading: boolean;
+    emailNotConfirmed: boolean;
 }
 
 interface AuthContextValue extends AuthState {
@@ -45,6 +47,7 @@ interface AuthContextValue extends AuthState {
     signOut: () => Promise<void>;
     updatePassword: (password: string) => Promise<{ success: boolean; error?: string }>;
     refreshProfile: () => Promise<void>;
+    resendConfirmation: (email: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -74,10 +77,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
         profile: null,
         loading: true,
         profileLoading: false,
+        emailNotConfirmed: false,
     });
     const lastUserIdRef = useRef<string | null>(null);
+    // Track which user's profile is already loaded to avoid refetching on window focus
+    const profileLoadedForRef = useRef<string | null>(null);
 
     // ── Fetch customer profile from backend ──
+    // If the backend rejects with "email_not_confirmed", we force-refresh the
+    // session token (to pick up a fresh JWT that includes email_confirmed_at)
+    // and retry ONCE.  This handles the stale-token scenario that occurs when
+    // a user clicks the confirmation link and is redirected back.
     const fetchProfile = useCallback(async () => {
         setState((s) => ({ ...s, profileLoading: true }));
         try {
@@ -87,44 +97,84 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 return;
             }
             const res = await api.get<MeResponse>("/auth/me");
-            setState((s) => ({ ...s, profile: res.data, profileLoading: false }));
-        } catch (err) {
-            console.error("[Auth] Failed to fetch profile:", err);
-            setState((s) => ({ ...s, profile: null, profileLoading: false }));
+            setState((s) => ({ ...s, profile: res.data, profileLoading: false, emailNotConfirmed: false }));
+            profileLoadedForRef.current = lastUserIdRef.current;
+        } catch (err: any) {
+            if (err?.body?.error === "email_not_confirmed") {
+                // The JWT may be stale (issued before confirmation).
+                // Force a token refresh and retry once.
+                try {
+                    const freshToken = await refreshAccessToken();
+                    if (freshToken) {
+                        const retryRes = await api.get<MeResponse>("/auth/me");
+                        setState((s) => ({ ...s, profile: retryRes.data, profileLoading: false, emailNotConfirmed: false }));
+                        profileLoadedForRef.current = lastUserIdRef.current;
+                        return;
+                    }
+                } catch {
+                    // Retry also failed — email is genuinely not confirmed
+                }
+                setState((s) => ({ ...s, profile: null, profileLoading: false, emailNotConfirmed: true }));
+            } else {
+                setState((s) => ({ ...s, profile: null, profileLoading: false }));
+            }
         }
     }, []);
 
     // ── Listen for auth state changes ──
+    // This handler is intentionally synchronous and simple.
+    // It NEVER makes network calls or checks confirmation status.
+    // All confirmation logic is handled by fetchProfile above.
     useEffect(() => {
-        const unsubscribe = onAuthStateChange((newSession, _user, event) => {
+        let isMounted = true;
+
+        const handleAuthChange = (newSession: Session | null, event: string) => {
+            if (!isMounted) return;
+
             const userId = newSession?.user?.id ?? null;
             const userChanged = userId !== lastUserIdRef.current;
 
-            if (event !== "TOKEN_REFRESHED" || userChanged) {
+            // Skip TOKEN_REFRESHED when user hasn't changed (routine token renewal)
+            if (event === "TOKEN_REFRESHED" && !userChanged) {
+                return;
+            }
+
+            // Only update state if something meaningful changed
+            if (userChanged || event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED" || event === "INITIAL_SESSION") {
                 setState((s) => ({
                     ...s,
                     session: newSession,
                     user: newSession?.user ?? null,
                     loading: false,
                 }));
-            } else {
-                setState((s) => ({ ...s, loading: false }));
             }
 
-            if (newSession && userChanged) {
+            // Fetch profile only on sign-in or user change.
+            // Skip if profile is already loaded for this user (avoids refetch on window focus).
+            const alreadyLoaded = profileLoadedForRef.current === userId;
+            if (newSession && !alreadyLoaded && (userChanged || event === "SIGNED_IN" || event === "USER_UPDATED")) {
                 lastUserIdRef.current = userId;
                 fetchProfile();
             } else if (!newSession && userChanged) {
                 lastUserIdRef.current = null;
+                profileLoadedForRef.current = null;
                 setState((s) => ({
                     ...s,
                     profile: null,
                     profileLoading: false,
+                    emailNotConfirmed: false,
                 }));
             }
+        };
+
+        const unsubscribe = onAuthStateChange((newSession, _user, event) => {
+            handleAuthChange(newSession, event);
         });
 
-        return unsubscribe;
+        return () => {
+            isMounted = false;
+            unsubscribe();
+        };
     }, [fetchProfile]);
 
     // ── Sign Up ──
@@ -191,6 +241,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             profile: null,
             loading: false,
             profileLoading: false,
+            emailNotConfirmed: false,
         });
         lastUserIdRef.current = null;
     }, []);
@@ -209,6 +260,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
         []
     );
 
+    // ── Resend Confirmation ──
+    const handleResendConfirmation = useCallback(
+        async (email: string): Promise<{ success: boolean; error?: string }> => {
+            try {
+                await api.post("/auth/resend-confirmation", { email });
+                return { success: true };
+            } catch (err: any) {
+                return { success: false, error: err?.body?.message || "Failed to resend confirmation email." };
+            }
+        },
+        []
+    );
+
     const value: AuthContextValue = {
         ...state,
         signUp: handleSignUp,
@@ -216,6 +280,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         signOut: handleSignOut,
         updatePassword: handleUpdatePassword,
         refreshProfile: fetchProfile,
+        resendConfirmation: handleResendConfirmation,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,7 +1,8 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Phone, MessageCircle, Loader2 } from "lucide-react";
-import { cn } from "@repo/ui";
+import { cn, toast } from "@repo/ui";
+import { useAuth } from "@/hooks/use-auth";
 
 interface PortalAuthViewProps {
     authMode: "login" | "signup";
@@ -39,6 +40,21 @@ const AuthPage: React.FC<PortalAuthViewProps> = ({
     handleAuth,
 }) => {
     const { t } = useTranslation();
+    const [resending, setResending] = React.useState(false);
+    const { resendConfirmation } = useAuth();
+
+    const isUserExistsError = authError?.includes("already exists") || authError?.includes("already registered");
+
+    const onResendConfirmation = async () => {
+        setResending(true);
+        const res = await resendConfirmation(authEmail);
+        setResending(false);
+        if (res.success) {
+            toast.success("Confirmation email resent successfully.");
+        } else {
+            toast.error(res.error || "Failed to resend confirmation.");
+        }
+    };
 
     return (
         <div className="flex min-h-[80vh] flex-col items-center justify-center pt-8 animate-fade-in">
@@ -51,18 +67,41 @@ const AuthPage: React.FC<PortalAuthViewProps> = ({
                         className="text-4xl font-normal text-foreground"
                         style={{ fontFamily: "var(--font-accent)" }}
                     >
-                        {authMode === "login" ? t('welcome_back') : t('create_account')}
+                        {isUserExistsError ? "Already Registered" : authMode === "login" ? t('welcome_back') : t('create_account')}
                     </h2>
                     <p
                         className="text-sm font-medium text-muted-foreground leading-relaxed"
                     >
-                        {authMode === "login"
-                            ? t('login_desc')
-                            : t('signup_desc')}
+                        {isUserExistsError
+                            ? "Looks like you already have an account with this email address."
+                            : authMode === "login"
+                                ? t('login_desc')
+                                : t('signup_desc')}
                     </p>
                 </div>
 
-                <div className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
+                {isUserExistsError ? (
+                    <div className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
+                        <button
+                            onClick={() => {
+                                setAuthMode("login");
+                                handleAuth(); // optional: try to login immediately with the password they typed, or just switch modes
+                            }}
+                            className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 shadow-md active:scale-[0.98]"
+                        >
+                            Log in instead
+                        </button>
+                        <button
+                            onClick={onResendConfirmation}
+                            disabled={resending}
+                            className="w-full rounded-xl border border-border bg-background py-3 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                            {resending && <Loader2 className="h-4 w-4 animate-spin" />}
+                            Resend confirmation
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
                     {authMode === "signup" && (
                         <div className="space-y-1.5 text-left">
                             <label className="text-xs font-semibold text-muted-foreground">{t('full_name_label')}</label>
@@ -135,20 +174,23 @@ const AuthPage: React.FC<PortalAuthViewProps> = ({
                         {authMode === "login" ? t('login_btn') : t('signup_btn')}
                     </button>
                 </div>
+                )}
 
-                <p className="text-center text-xs text-muted-foreground">
-                    {authMode === "login" ? (
-                        <>
-                            {t('dont_have_account')}{" "}
-                            <button onClick={() => setAuthMode("signup")} className="text-primary underline font-semibold">{t('sign_up_link')}</button>
-                        </>
-                    ) : (
-                        <>
-                            {t('already_have_account')}{" "}
-                            <button onClick={() => setAuthMode("login")} className="text-primary underline font-semibold">{t('log_in_link')}</button>
-                        </>
-                    )}
-                </p>
+                {!isUserExistsError && (
+                    <p className="text-center text-xs text-muted-foreground">
+                        {authMode === "login" ? (
+                            <>
+                                {t('dont_have_account')}{" "}
+                                <button onClick={() => setAuthMode("signup")} className="text-primary underline font-semibold">{t('sign_up_link')}</button>
+                            </>
+                        ) : (
+                            <>
+                                {t('already_have_account')}{" "}
+                                <button onClick={() => setAuthMode("login")} className="text-primary underline font-semibold">{t('log_in_link')}</button>
+                            </>
+                        )}
+                    </p>
+                )}
             </div>
         </div>
     );

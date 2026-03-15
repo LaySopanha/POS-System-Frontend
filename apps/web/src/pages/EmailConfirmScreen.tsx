@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Mail, CheckCircle2, RefreshCw, ArrowLeft } from "lucide-react";
 import { supabase } from "@repo/store";
+import { toast } from "@repo/ui";
+import { useAuth } from "@/hooks/use-auth";
 
 interface EmailConfirmScreenProps {
     email: string;
@@ -12,6 +14,7 @@ const EmailConfirmScreen: React.FC<EmailConfirmScreenProps> = ({ email, onBack, 
     const [status, setStatus] = useState<"waiting" | "confirmed" | "error">("waiting");
     const [resending, setResending] = useState(false);
     const [resendCooldown, setResendCooldown] = useState(0);
+    const { resendConfirmation } = useAuth();
 
     // Poll Supabase auth state — when the user clicks the confirmation link
     // in a different tab, Supabase updates the session and this listener fires.
@@ -30,13 +33,14 @@ const EmailConfirmScreen: React.FC<EmailConfirmScreenProps> = ({ email, onBack, 
     const handleResend = async () => {
         if (resendCooldown > 0) return;
         setResending(true);
-        await supabase.auth.resend({
-            type: "signup",
-            email,
-            options: { emailRedirectTo: window.location.origin }
-        });
+        const res = await resendConfirmation(email);
         setResending(false);
-        setResendCooldown(60);
+        if (res.success) {
+            setResendCooldown(60);
+            toast.success("Confirmation email resent successfully.");
+        } else {
+            toast.error(res.error || "Failed to resend confirmation email.");
+        }
     };
 
     // Countdown timer for resend button
