@@ -160,7 +160,10 @@ export function useUpdateSchedule() {
     return useMutation({
         mutationFn: ({ id, ...body }: UpdateScheduleBody & { id: string }) =>
             api.put<{ data: ApiSchedule }>(`/admin/wellness/schedules/${id}`, body),
-        onSuccess: () => qc.invalidateQueries({ queryKey: scheduleQueryKeys.all }),
+        onSuccess: (_data, vars) => {
+            qc.invalidateQueries({ queryKey: scheduleQueryKeys.all });
+            qc.invalidateQueries({ queryKey: scheduleQueryKeys.detail(vars.id) });
+        },
     });
 }
 

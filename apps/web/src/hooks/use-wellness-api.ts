@@ -98,7 +98,9 @@ export function useSchedule(serviceTypeId?: string | null) {
             fetchJson<{ data: ApiScheduleSlot[] }>(
                 `/wellness/schedule${params}`
             ).then((r) => r.data),
-        staleTime: 60 * 1000, // 1 minute (schedule changes more often)
+        staleTime: 60 * 1000, // 1 minute
+        refetchInterval: 90 * 1000, // refetch every 90s so admin changes appear without refresh
+        refetchOnWindowFocus: true, // refetch when user returns to tab
     });
 }
 
