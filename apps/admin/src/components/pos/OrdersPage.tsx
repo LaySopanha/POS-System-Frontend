@@ -26,8 +26,9 @@ interface OrdersPageProps {
 }
 
 const OrdersPage = ({ onPrintReceipt }: OrdersPageProps) => {
-  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
-  const { data: orders = [], isLoading, refetch } = useApiPosOrders(selectedDate);
+  const [selectedDate, setSelectedDate] = useState<string | null>(format(new Date(), "yyyy-MM-dd"));
+  const [allDay, setAllDay] = useState<boolean>(false);
+  const { data: orders = [], isLoading, refetch } = useApiPosOrders(allDay ? undefined : selectedDate!);
   const updateStatus = useUpdateOrderStatus();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ApiOrderStatus>("all");
@@ -67,21 +68,33 @@ const OrdersPage = ({ onPrintReceipt }: OrdersPageProps) => {
         <div className="flex items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 h-9 px-4 font-medium border-border hover:border-primary/50 transition-colors">
+              <Button variant="outline" size="sm" className="gap-2 h-9 px-4 font-medium border-border hover:border-primary/50 transition-colors" disabled={allDay}>
                 <Calendar className="h-4 w-4 text-primary" />
-                {format(new Date(selectedDate + "T00:00:00"), "EEEE, MMM d, yyyy")}
+                {selectedDate ? format(new Date(selectedDate + "T00:00:00"), "EEEE, MMM d, yyyy") : "All Day"}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">
               <CalendarComponent
                 mode="single"
-                selected={new Date(selectedDate + "T00:00:00")}
+                selected={selectedDate ? new Date(selectedDate + "T00:00:00") : undefined}
                 onSelect={(d) => d && setSelectedDate(format(d, "yyyy-MM-dd"))}
                 disabled={(d) => d > new Date()}
                 initialFocus
               />
             </PopoverContent>
           </Popover>
+          <Button
+            variant={allDay ? "default" : "outline"}
+            size="sm"
+            className="gap-2 h-9 px-4 font-medium border-border hover:border-primary/50 transition-colors"
+            onClick={() => {
+              setAllDay((prev) => !prev);
+              if (!allDay) setSelectedDate(null);
+              else setSelectedDate(format(new Date(), "yyyy-MM-dd"));
+            }}
+          >
+            All Day
+          </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2 h-9">
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
