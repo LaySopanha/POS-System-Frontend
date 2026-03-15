@@ -241,17 +241,61 @@ const InboxPage = () => {
               </div>
 
               {/* Extra metadata from data payload */}
-              {selected.data && Object.keys(selected.data).length > 0 && (
-                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Details</p>
-                  {Object.entries(selected.data).map(([key, value]) => (
-                    <p key={key} className="text-sm text-foreground">
-                      <span className="font-medium capitalize">{key.replace(/_/g, " ")}:</span>{" "}
-                      <span className="text-muted-foreground">{String(value)}</span>
-                    </p>
-                  ))}
-                </div>
-              )}
+              {selected.data && Object.keys(selected.data).length > 0 && (() => {
+                const d = selected.data;
+
+                // Smart renderer for package purchases
+                if (selected.type === "package_purchase") {
+                  const paymentLabel: Record<string, string> = {
+                    qr_paynow: "QR / PayNow",
+                    cash: "Cash",
+                    card: "Card",
+                    qr_scan: "QR / ABA",
+                  };
+                  const packageTypeLabel: Record<string, string> = {
+                    membership: "Membership",
+                    class_package: "Class Package",
+                    service: "Service",
+                  };
+                  const rows: { label: string; value: string }[] = [];
+                  if (d.customer_name)  rows.push({ label: "Customer",  value: String(d.customer_name) });
+                  if (d.customer_email) rows.push({ label: "Email",     value: String(d.customer_email) });
+                  if (d.card_number)    rows.push({ label: "Card #",    value: String(d.card_number) });
+                  if (d.package_name)   rows.push({ label: "Package",   value: String(d.package_name) });
+                  if (d.package_type)   rows.push({ label: "Type",      value: packageTypeLabel[String(d.package_type)] ?? String(d.package_type) });
+                  if (d.package_price != null) rows.push({ label: "Price", value: `$${parseFloat(String(d.package_price)).toFixed(2)}` });
+                  if (d.payment_method) rows.push({ label: "Payment",   value: paymentLabel[String(d.payment_method)] ?? String(d.payment_method) });
+
+                  return (
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Details</p>
+                      {rows.map(({ label, value }) => (
+                        <p key={label} className="text-sm text-foreground flex justify-between gap-4">
+                          <span className="font-medium text-muted-foreground shrink-0">{label}</span>
+                          <span className="text-right font-mono text-xs break-all">{value}</span>
+                        </p>
+                      ))}
+                    </div>
+                  );
+                }
+
+                // Generic renderer — skip raw UUIDs (36-char with hyphens)
+                const isUuid = (v: unknown) => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+                const visibleEntries = Object.entries(d).filter(([, v]) => !isUuid(v));
+                if (visibleEntries.length === 0) return null;
+                return (
+                  <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Details</p>
+                    {visibleEntries.map(([key, value]) => (
+                      <p key={key} className="text-sm text-foreground">
+                        <span className="font-medium capitalize">{key.replace(/_/g, " ")}:</span>{" "}
+                        <span className="text-muted-foreground">{String(value)}</span>
+                      </p>
+                    ))}
+                  </div>
+                );
+              })()}
+
 
               {(selectedUserId || selectedToEmail) && (
                 <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">

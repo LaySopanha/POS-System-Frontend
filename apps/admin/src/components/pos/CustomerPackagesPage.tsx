@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Search, Plus, Pencil, Ticket, Users, AlertCircle, CheckCircle2, Clock, Loader2 } from "lucide-react";
+import { Search, Plus, Pencil, Users, AlertCircle, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import { cn } from "@repo/ui";
 import { Input } from "@repo/ui";
 import { Button } from "@repo/ui";
@@ -19,7 +19,6 @@ import {
   useApiWellnessPackages,
   useApiCustomers,
   type ApiUserPackage,
-  type ApiWellnessPackage,
 } from "@repo/store";
 
 const statusColors: Record<string, string> = {
@@ -66,7 +65,6 @@ const CustomerPackagesPage = () => {
   const [editForm, setEditForm] = useState({
     sessionsRemaining: "",
     expiryDate: "",
-    status: "",
     paymentStatus: "",
   });
 
@@ -124,7 +122,6 @@ const CustomerPackagesPage = () => {
     setEditForm({
       sessionsRemaining: pkg.sessions_remaining != null ? String(pkg.sessions_remaining) : "",
       expiryDate: pkg.expiry_date ? pkg.expiry_date.split("T")[0] : "",
-      status: pkg.status,
       paymentStatus: pkg.payment_status,
     });
     setEditPkg(pkg);
@@ -137,7 +134,6 @@ const CustomerPackagesPage = () => {
         id: editPkg.id,
         sessions_remaining: editForm.sessionsRemaining !== "" ? parseInt(editForm.sessionsRemaining) : null,
         expiry_date: editForm.expiryDate || null,
-        status: editForm.status as ApiUserPackage["status"],
         payment_status: editForm.paymentStatus as ApiUserPackage["payment_status"],
       });
       setEditPkg(null);
@@ -396,29 +392,26 @@ const CustomerPackagesPage = () => {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Status</Label>
-                <Select value={editForm.status} onValueChange={(v) => setEditForm(f => ({ ...f, status: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["active", "not_started", "pending", "expired", "exhausted", "cancelled"].map(s => (
-                      <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Payment Status</Label>
-                <Select value={editForm.paymentStatus} onValueChange={(v) => setEditForm(f => ({ ...f, paymentStatus: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="confirmed">Confirmed</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1.5">
+              <Label>Payment Status</Label>
+              <Select value={editForm.paymentStatus} onValueChange={(v) => setEditForm(f => ({ ...f, paymentStatus: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Read-only current package status */}
+            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Package Status</span>
+              <span className={cn(
+                "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                statusColors[editPkg?.status ?? "pending"] || statusColors.pending
+              )}>
+                {editPkg?.status}
+              </span>
             </div>
           </div>
           <DialogFooter>
