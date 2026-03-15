@@ -957,9 +957,9 @@ const AccountPage: React.FC<AccountPageProps> = ({
                         </div>
 
                         {!isMembershipMember && allowedClassTypes.length > 0 && (
-                            <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 flex items-start gap-3">
-                                <Info size={14} className="text-blue-500 mt-0.5" />
-                                <p className="text-[10px] text-blue-700 font-bold uppercase tracking-tight leading-relaxed">
+                            <div className="bg-muted/30 border border-border rounded-2xl p-4 flex items-start gap-3">
+                                <Info size={14} className="text-muted-foreground mt-0.5" />
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight leading-relaxed">
                                     {t('booking_restricted_msg')}
                                 </p>
                             </div>
