@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Search, ChevronRight, Calendar, Coins, Loader2, CreditCard, Package, User } from "lucide-react";
+import { Search, ChevronRight, Calendar, Coins, Loader2, CreditCard, Package, User, CalendarCheck2 } from "lucide-react";
 import { cn } from "@repo/ui";
 import { Input } from "@repo/ui";
 import { Button } from "@repo/ui";
@@ -31,7 +31,7 @@ const paymentColors: Record<string, string> = {
   failed:    "text-rose-600",
 };
 
-type DetailTab = "overview" | "packages" | "points";
+type DetailTab = "overview" | "classes" | "packages" | "points";
 
 const CustomersPage = () => {
   const [search, setSearch] = useState("");
@@ -221,10 +221,11 @@ const CustomersPage = () => {
 
                 {/* ── Tabs ── */}
                 <div className="flex gap-1 border-b border-border pb-0 mt-2">
-                  {(["overview", "packages", "points"] as DetailTab[]).map((tab) => {
-                    const labels: Record<DetailTab, string> = { overview: "Overview", packages: "Packages", points: "Points History" };
+                  {(["overview", "classes", "packages", "points"] as DetailTab[]).map((tab) => {
+                    const labels: Record<DetailTab, string> = { overview: "Overview", classes: "Classes", packages: "Packages", points: "Points History" };
                     const icons: Record<DetailTab, React.ReactNode> = {
                       overview: <User className="h-3.5 w-3.5" />,
+                      classes:  <CalendarCheck2 className="h-3.5 w-3.5" />,
                       packages: <Package className="h-3.5 w-3.5" />,
                       points:   <Coins className="h-3.5 w-3.5" />,
                     };
@@ -315,6 +316,76 @@ const CustomersPage = () => {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* ── Tab: Classes ── */}
+                {detailTab === "classes" && (
+                  <div className="space-y-4 pt-2">
+                    {/* Waitlist Entries */}
+                    {customerDetail.user.waitlist_entries && customerDetail.user.waitlist_entries.length > 0 && (
+                      <div className="space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">In Queue</p>
+                        <div className="space-y-2">
+                          {customerDetail.user.waitlist_entries.map((wl) => (
+                            <div key={wl.id} className="rounded-lg border border-border bg-card p-3 space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {new Date(`${wl.schedule.class_date}T${wl.schedule.start_time}`).toLocaleDateString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">{wl.schedule.service_type?.name ?? "Class"}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className={cn(
+                                    "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                                    wl.status === "waiting" ? "bg-amber-50 text-amber-600 border-amber-100" :
+                                    wl.status === "promoted" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                                    "bg-slate-50 text-slate-500 border-slate-100"
+                                  )}>
+                                    {wl.status === "waiting" ? `Waitlist #${wl.position}` : wl.status}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Booked Classes */}
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bookings</p>
+                      {customerDetail.user.wellness_bookings && customerDetail.user.wellness_bookings.length > 0 ? (
+                        <div className="space-y-2">
+                          {customerDetail.user.wellness_bookings.map((bk) => (
+                            <div key={bk.id} className="rounded-lg border border-border bg-card p-3 space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {new Date(`${bk.schedule.class_date}T${bk.schedule.start_time}`).toLocaleDateString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">{bk.schedule.service_type?.name ?? "Class"}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className={cn(
+                                    "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                                    bk.status === "confirmed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                                    bk.status === "attended" ? "bg-blue-50 text-blue-600 border-blue-100" :
+                                    bk.status === "no_show" ? "bg-rose-50 text-rose-600 border-rose-100" :
+                                    "bg-slate-50 text-slate-500 border-slate-100" // cancelled
+                                  )}>
+                                    {bk.status.replace("_", " ")}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="py-6 text-center text-sm text-muted-foreground">No bookings found</div>
+                      )}
+                    </div>
                   </div>
                 )}
 

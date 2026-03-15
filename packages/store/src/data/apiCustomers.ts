@@ -53,6 +53,29 @@ export interface ApiCustomerDetail extends ApiCustomerAccount {
     point_transactions: ApiPointTransaction[];
     redemptions: unknown[];
     tier_history: ApiTierHistory[];
+    user: ApiCustomerAccount["user"] & {
+        wellness_bookings?: {
+            id: string;
+            status: string;
+            booked_at: string;
+            schedule: {
+                class_date: string;
+                start_time: string;
+                service_type?: { name: string };
+            };
+        }[];
+        waitlist_entries?: {
+            id: string;
+            status: string;
+            joined_at: string;
+            position: number;
+            schedule: {
+                class_date: string;
+                start_time: string;
+                service_type?: { name: string };
+            };
+        }[];
+    };
 }
 
 // ─── Paginated response shape (Laravel) ──────────────────────────────────────

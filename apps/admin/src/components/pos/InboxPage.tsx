@@ -263,6 +263,7 @@ const InboxPage = () => {
                   if (d.card_number)    rows.push({ label: "Card #",    value: String(d.card_number) });
                   if (d.package_name)   rows.push({ label: "Package",   value: String(d.package_name) });
                   if (d.package_type)   rows.push({ label: "Type",      value: packageTypeLabel[String(d.package_type)] ?? String(d.package_type) });
+                  if (d.package_category) rows.push({ label: "Category", value: String(d.package_category) });
                   if (d.package_price != null) rows.push({ label: "Price", value: `$${parseFloat(String(d.package_price)).toFixed(2)}` });
                   if (d.payment_method) rows.push({ label: "Payment",   value: paymentLabel[String(d.payment_method)] ?? String(d.payment_method) });
 
