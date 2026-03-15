@@ -296,8 +296,10 @@ export const useZenPortal = () => {
             status: up.payment_status === "confirmed" && (up.status === "active" || up.status === "not_started")
                 ? (up.start_date || up.status === "active" ? "active" as const : "not_started" as const)
                 : up.payment_status === "pending"
-                    ? "inactive" as const
-                    : "expired" as const,
+                    ? "pending" as const
+                    : up.status === "inactive"
+                        ? "inactive" as const
+                        : "expired" as const,
             };
         });
     }, [apiPackages, apiServiceTypes, bookingUsageByPackage]);

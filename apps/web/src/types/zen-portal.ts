@@ -33,7 +33,7 @@ export interface PurchasedPackage {
     startedAt?: string | null;  // Set on first booking (package activation date)
     activatedAt?: string;       // Timestamp when activated
     expiresAt?: string;         // Computed: startedAt + validity_days
-    status: "active" | "not_started" | "inactive" | "expired";
+    status: "active" | "not_started" | "inactive" | "expired" | "pending";
 }
 
 export interface BookedClass {

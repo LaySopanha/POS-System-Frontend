@@ -4,7 +4,7 @@ import {
     User, LogOut, Package, History, Users, Info,
     LayoutDashboard, TrendingUp, CreditCard,
     ChevronRight, ChevronLeft, Calendar as CalendarIcon, Clock, MapPin, CheckCircle2, Check,
-    AlertCircle, Trophy, Star, ShieldCheck,
+    AlertCircle, Trophy, Star, ShieldCheck, Lock,
     Globe, FileText, Edit3, Save, X, DownloadCloud, KeyRound, Loader2
 } from "lucide-react";
 import { cn } from "@repo/ui";
@@ -134,7 +134,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
     const [isPasswordUpdating, setIsPasswordUpdating] = React.useState(false);
 
     const activePkgs = purchasedPackages.filter(p =>
-        (p.status === "active" || p.status === "inactive" || p.status === "not_started")
+        (p.status === "active" || p.status === "inactive" || p.status === "not_started" || p.status === "pending")
         && (p.sessionsUsed < p.sessions || (nonMembershipRecoveryBenefitsByPackage[p.id]?.freeRecoveryRemaining || 0) > 0)
     );
     const pastPkgs = purchasedPackages.filter(p => p.status === "expired" || p.sessionsUsed >= p.sessions);
@@ -160,12 +160,9 @@ const AccountPage: React.FC<AccountPageProps> = ({
             return bDate ? bDate < now : false;
         }
         return b.status === "completed"
-            || b.status === "attended"
             || b.status === "late-cancel"
             || b.status === "no-show"
-            || b.status === "no_show"
-            || b.status === "cancelled"
-            || b.status === "rescheduled";
+            || b.status === "cancelled";
     }).sort((a, b) => b.date.localeCompare(a.date));
 
     // Derive isMembershipMember for UI conditional messages
@@ -447,11 +444,14 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                             <Star size={12} className="text-yellow-500 fill-yellow-500" /> {t('current_membership')}
                                         </h4>
                                         {membershipPkgs.length > 0 ? (
-                                            <div className="flex justify-between items-center group">
+                                            <div className={cn("flex justify-between items-center group", membershipPkgs[0].status === "pending" && "opacity-60 grayscale-[0.5]")}>
                                                 <div>
-                                                    <p className="text-lg font-bold text-foreground">{membershipPkgs[0].packageName}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-lg font-bold text-foreground">{membershipPkgs[0].packageName}</p>
+                                                        {membershipPkgs[0].status === "pending" && <Lock size={12} className="text-muted-foreground" />}
+                                                    </div>
                                                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight mt-1">
-                                                        {t('expires')} {membershipPkgs[0].expiresAt?.split('T')[0] || t('not_activated')}
+                                                        {membershipPkgs[0].status === "pending" ? "Pending Payment" : `${t('expires')} ${membershipPkgs[0].expiresAt?.split('T')[0] || t('not_activated')}`}
                                                     </p>
                                                 </div>
                                                 <button
@@ -474,11 +474,14 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                             </h4>
                                             <div className="space-y-3">
                                                 {classPkgs.slice(0, 3).map(pkg => (
-                                                    <div key={pkg.id} className="flex justify-between items-center bg-muted/20 p-3 rounded-2xl border border-border/50">
+                                                    <div key={pkg.id} className={cn("flex justify-between items-center bg-muted/20 p-3 rounded-2xl border border-border/50", pkg.status === "pending" && "opacity-60 grayscale-[0.5]")}>
                                                         <div>
-                                                            <p className="text-xs font-bold text-foreground">{pkg.packageName}</p>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="text-xs font-bold text-foreground">{pkg.packageName}</p>
+                                                                {pkg.status === "pending" && <Lock size={10} className="text-muted-foreground" />}
+                                                            </div>
                                                             <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-tight mt-0.5">
-                                                                {pkg.sessions - pkg.sessionsUsed} {t('sessions_remaining')}
+                                                                {pkg.status === "pending" ? "Pending Payment" : `${pkg.sessions - pkg.sessionsUsed} ${t('sessions_remaining')}`}
                                                             </p>
                                                         </div>
                                                     </div>
@@ -508,7 +511,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
                             {activePkgs.slice(0, visibleActivePackages).map((pkg) => (
                                 <div key={pkg.id} className="relative group">
                                     <div className="absolute -inset-0.5 bg-gradient-to-r from-matcha/20 to-matcha/5 rounded-[2.2rem] blur opacity-0 group-hover:opacity-100 transition duration-500"></div>
-                                    <div className="relative rounded-[2.5rem] border border-border bg-card p-8 shadow-sm overflow-hidden">
+                                    <div className={cn("relative rounded-[2.5rem] border bg-card p-8 shadow-sm overflow-hidden", pkg.status === "pending" ? "opacity-60 grayscale-[0.5] border-dashed border-border pointer-events-none" : "border-border")}>
                                         <div className="flex justify-between items-start mb-8">
                                             <div className="space-y-1">
                                                 <h3 className="text-2xl font-black text-foreground tracking-tight" style={{ fontFamily: "var(--font-accent)" }}>{pkg.packageName}</h3>
@@ -524,6 +527,11 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                                     {(pkg.status === "inactive" || pkg.status === "not_started") && (
                                                         <span className="text-[10px] font-black px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 uppercase tracking-widest animate-pulse">
                                                             Not started yet
+                                                        </span>
+                                                    )}
+                                                    {pkg.status === "pending" && (
+                                                        <span className="text-[10px] font-black px-3 py-1 rounded-full bg-slate-100 text-slate-500 uppercase tracking-widest flex items-center gap-1 border border-slate-200">
+                                                            <Lock size={10} /> Pending Payment
                                                         </span>
                                                     )}
                                                 </div>
