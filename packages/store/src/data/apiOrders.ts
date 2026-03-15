@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { adminNotificationQueryKeys } from "./apiNotifications";
 import type { ApiProduct, ApiProductVariant } from "./apiProducts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -86,6 +87,8 @@ export function usePlaceOrder() {
             api.post<{ data: ApiOrder }>("/pos/orders", payload).then((r) => r.data),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: orderQueryKeys.all });
+            // New order also creates an admin notification – refresh inbox immediately
+            qc.invalidateQueries({ queryKey: adminNotificationQueryKeys.all });
         },
     });
 }

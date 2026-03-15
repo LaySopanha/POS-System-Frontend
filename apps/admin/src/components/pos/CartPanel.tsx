@@ -24,6 +24,7 @@ const CartPanel = ({ items, onUpdateQty, onRemove, onClear, onPlaceOrder, isSubm
   const [receivedAmount, setReceivedAmount] = useState("");
   const [discountCode, setDiscountCode] = useState("");
   const [memberDiscountPercent, setMemberDiscountPercent] = useState("10");
+  const [showDiscount, setShowDiscount] = useState(false);
 
   const subtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const matchedMemberCode = discountCode.trim().toUpperCase().match(/^MEMBER(\d{1,3})$/);
@@ -262,48 +263,68 @@ const CartPanel = ({ items, onUpdateQty, onRemove, onClear, onPlaceOrder, isSubm
                 <span>${tax.toFixed(2)}</span>
               </div>
 
-              <div className="space-y-1.5 pt-1">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Discount Code</Label>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-                    <Input
-                      placeholder="Enter code"
-                      value={discountCode}
-                      onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
-                      className="pl-7 h-8 text-[10px] bg-muted/50 uppercase tracking-widest"
-                    />
-                  </div>
-                  <button
-                    onClick={() => setDiscountCode("")}
-                    className="text-[10px] font-bold text-muted-foreground hover:text-foreground"
-                  >
-                    Clear
-                  </button>
-                </div>
+              {/* Collapsible discount controls */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowDiscount((v) => !v)}
+                  className={cn(
+                    "flex w-full items-center justify-between text-[10px] font-bold uppercase tracking-widest border rounded-lg px-3 py-2 transition-colors",
+                    showDiscount
+                      ? "bg-primary/10 border-primary text-primary shadow-sm"
+                      : "border-border text-primary hover:bg-primary/5 hover:border-primary"
+                  )}
+                >
+                  <span>Discount Options</span>
+                  <span className="text-[9px] font-semibold">
+                    {showDiscount ? "Hide" : "Show"}
+                  </span>
+                </button>
+                {showDiscount && (
+                  <div className="space-y-1.5 mt-2 animate-in fade-in slide-in-from-top-1 duration-200 border border-primary/40 bg-primary/5 rounded-lg p-3">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-primary">Discount Code</Label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-primary" />
+                        <Input
+                          placeholder="Enter code"
+                          value={discountCode}
+                          onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
+                          className="pl-7 h-8 text-[10px] bg-white border-primary/60 focus-visible:ring-primary uppercase tracking-widest"
+                        />
+                      </div>
+                      <button
+                        onClick={() => setDiscountCode("")}
+                        className="text-[10px] font-bold text-primary hover:text-primary/80"
+                      >
+                        Clear
+                      </button>
+                    </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="w-24">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={memberDiscountPercent}
-                      onChange={(e) => setMemberDiscountPercent(e.target.value)}
-                      className="h-8 text-[10px] font-bold bg-muted/50"
-                    />
+                    <div className="flex items-center gap-2">
+                      <div className="w-24">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={memberDiscountPercent}
+                          onChange={(e) => setMemberDiscountPercent(e.target.value)}
+                          className="h-8 text-[10px] font-bold bg-white border-primary/40 focus-visible:ring-primary"
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold text-primary uppercase tracking-wider">%</span>
+                      <button
+                        onClick={() => {
+                          const pct = Math.max(0, Math.min(100, Number(memberDiscountPercent) || 0));
+                          setDiscountCode(`MEMBER${pct}`);
+                        }}
+                        className="text-[10px] font-bold text-primary hover:text-primary/80 uppercase tracking-wider"
+                      >
+                        Member card shown
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">%</span>
-                  <button
-                    onClick={() => {
-                      const pct = Math.max(0, Math.min(100, Number(memberDiscountPercent) || 0));
-                      setDiscountCode(`MEMBER${pct}`);
-                    }}
-                    className="text-[10px] font-bold text-primary hover:text-primary/80 uppercase tracking-wider"
-                  >
-                    Member card shown
-                  </button>
-                </div>
+                )}
               </div>
             </div>
           )}
