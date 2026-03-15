@@ -354,11 +354,21 @@ const CustomersPage = () => {
                     )}
 
                     {/* Booked Classes */}
-                    <div className="space-y-3">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bookings</p>
+                    <div className="space-y-4">
                       {customerDetail.user.wellness_bookings && customerDetail.user.wellness_bookings.length > 0 ? (
-                        <div className="space-y-2">
-                          {customerDetail.user.wellness_bookings.map((bk) => (
+                        (() => {
+                          const now = new Date();
+                          const upcoming = customerDetail.user.wellness_bookings.filter(bk => {
+                            const bDate = new Date(`${bk.schedule.class_date}T${bk.schedule.start_time}`);
+                            return bDate >= now && !['cancelled', 'no_show', 'attended'].includes(bk.status);
+                          }).sort((a,b) => new Date(`${a.schedule.class_date}T${a.schedule.start_time}`).getTime() - new Date(`${b.schedule.class_date}T${b.schedule.start_time}`).getTime());
+                          
+                          const past = customerDetail.user.wellness_bookings.filter(bk => {
+                            const bDate = new Date(`${bk.schedule.class_date}T${bk.schedule.start_time}`);
+                            return bDate < now || ['cancelled', 'no_show', 'attended'].includes(bk.status);
+                          }).sort((a,b) => new Date(`${b.schedule.class_date}T${b.schedule.start_time}`).getTime() - new Date(`${a.schedule.class_date}T${a.schedule.start_time}`).getTime());
+
+                          const renderClass = (bk: any) => (
                             <div key={bk.id} className="rounded-lg border border-border bg-card p-3 space-y-2">
                               <div className="flex items-start justify-between gap-2">
                                 <div>
@@ -380,8 +390,25 @@ const CustomersPage = () => {
                                 </div>
                               </div>
                             </div>
-                          ))}
-                        </div>
+                          );
+
+                          return (
+                            <>
+                              {upcoming.length > 0 && (
+                                <div className="space-y-3">
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Upcoming Bookings</p>
+                                  <div className="space-y-2">{upcoming.map(renderClass)}</div>
+                                </div>
+                              )}
+                              {past.length > 0 && (
+                                <div className="space-y-3">
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Past Bookings</p>
+                                  <div className="space-y-2">{past.map(renderClass)}</div>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()
                       ) : (
                         <div className="py-6 text-center text-sm text-muted-foreground">No bookings found</div>
                       )}
@@ -391,46 +418,68 @@ const CustomersPage = () => {
 
                 {/* ── Tab: Packages ── */}
                 {detailTab === "packages" && (
-                  <div className="space-y-3 pt-2">
+                  <div className="space-y-4 pt-2">
                     {customerPackages.length === 0 ? (
                       <div className="py-10 text-center text-sm text-muted-foreground">No packages purchased yet</div>
                     ) : (
-                      customerPackages.map((pkg) => {
-                        const pkgName     = pkg.package?.name ?? "—";
-                        const pkgTypeName = pkg.package?.service_type?.name ?? (pkg.package?.package_type === "membership" ? "Membership" : "—");
-                        const sessions    = pkg.sessions_remaining;
-                        const totalSess  = pkg.package?.sessions_included;
-                        return (
-                          <div key={pkg.id} className="rounded-lg border border-border bg-card p-3 space-y-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="text-sm font-semibold text-foreground">{pkgName}</p>
-                                <p className="text-xs text-muted-foreground">{pkgTypeName}</p>
+                        (() => {
+                          const active = customerPackages.filter(p => ['active', 'not_started'].includes(p.status) || p.payment_status === 'pending');
+                          const past = customerPackages.filter(p => !['active', 'not_started'].includes(p.status) && p.payment_status !== 'pending');
+
+                          const renderPkg = (pkg: any) => {
+                            const pkgName     = pkg.package?.name ?? "—";
+                            const pkgTypeName = pkg.package?.service_type?.name ?? (pkg.package?.package_type === "membership" ? "Membership" : "—");
+                            const sessions    = pkg.sessions_remaining;
+                            const totalSess  = pkg.package?.sessions_included;
+                            return (
+                              <div key={pkg.id} className="rounded-lg border border-border bg-card p-3 space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <p className="text-sm font-semibold text-foreground">{pkgName}</p>
+                                    <p className="text-xs text-muted-foreground">{pkgTypeName}</p>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <span className={cn("text-xs font-semibold capitalize", paymentColors[pkg.payment_status])}>
+                                      {pkg.payment_status}
+                                    </span>
+                                    <span className={cn(
+                                      "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                                      pkgStatusColors[pkg.status] || pkgStatusColors.pending
+                                    )}>
+                                      {pkg.status}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                  {sessions != null && (
+                                    <span>Sessions: <strong className="text-foreground">{sessions}{totalSess != null ? `/${totalSess}` : ""}</strong></span>
+                                  )}
+                                  {pkg.expiry_date && (
+                                    <span>Expires: <strong className="text-foreground">{new Date(pkg.expiry_date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</strong></span>
+                                  )}
+                                  <span>Purchased: <strong className="text-foreground">{new Date(pkg.purchase_date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</strong></span>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className={cn("text-xs font-semibold capitalize", paymentColors[pkg.payment_status])}>
-                                  {pkg.payment_status}
-                                </span>
-                                <span className={cn(
-                                  "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-                                  pkgStatusColors[pkg.status] || pkgStatusColors.pending
-                                )}>
-                                  {pkg.status}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                              {sessions != null && (
-                                <span>Sessions: <strong className="text-foreground">{sessions}{totalSess != null ? `/${totalSess}` : ""}</strong></span>
+                            );
+                          };
+
+                          return (
+                            <>
+                              {active.length > 0 && (
+                                <div className="space-y-3">
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active & Pending</p>
+                                  <div className="space-y-2">{active.map(renderPkg)}</div>
+                                </div>
                               )}
-                              {pkg.expiry_date && (
-                                <span>Expires: <strong className="text-foreground">{new Date(pkg.expiry_date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</strong></span>
+                              {past.length > 0 && (
+                                <div className="space-y-3">
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Past Packages</p>
+                                  <div className="space-y-2">{past.map(renderPkg)}</div>
+                                </div>
                               )}
-                              <span>Purchased: <strong className="text-foreground">{new Date(pkg.purchase_date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</strong></span>
-                            </div>
-                          </div>
-                        );
-                      })
+                            </>
+                          );
+                        })()
                     )}
                   </div>
                 )}
