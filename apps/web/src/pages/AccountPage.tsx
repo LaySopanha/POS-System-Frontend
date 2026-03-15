@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
     User, LogOut, Package, History, Users, Info,
     LayoutDashboard, TrendingUp, CreditCard,
-    ChevronRight, Calendar, Clock, MapPin, CheckCircle2,
+    ChevronRight, Calendar, Clock, MapPin, CheckCircle2, Check,
     AlertCircle, Trophy, Star, ShieldCheck,
     Globe, FileText, Edit3, Save, X, DownloadCloud, KeyRound, Loader2
 } from "lucide-react";
@@ -105,6 +105,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
     const [bookingActionLoading, setBookingActionLoading] = React.useState<{ id: string; action: "cancel" | "reschedule" } | null>(null);
     const [pendingBookingAction, setPendingBookingAction] = React.useState<{ action: "cancel" | "reschedule"; booking: BookedClass } | null>(null);
     const [visiblePastPackages, setVisiblePastPackages] = React.useState(6);
+    const [visibleActivePackages, setVisibleActivePackages] = React.useState(3);
     const [visiblePreviousBookings, setVisiblePreviousBookings] = React.useState(6);
     // Profile editing state
     const [isEditingProfile, setIsEditingProfile] = React.useState(false);
@@ -502,7 +503,7 @@ const AccountPage: React.FC<AccountPageProps> = ({
                             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2 px-2">
                                 <CheckCircle2 size={14} className="text-green-500" /> Active Packages & Memberships
                             </h3>
-                            {activePkgs.map((pkg) => (
+                            {activePkgs.slice(0, visibleActivePackages).map((pkg) => (
                                 <div key={pkg.id} className="relative group">
                                     <div className="absolute -inset-0.5 bg-gradient-to-r from-matcha/20 to-matcha/5 rounded-[2.2rem] blur opacity-0 group-hover:opacity-100 transition duration-500"></div>
                                     <div className="relative rounded-[2.5rem] border border-border bg-card p-8 shadow-sm overflow-hidden">
@@ -570,28 +571,21 @@ const AccountPage: React.FC<AccountPageProps> = ({
 
                                         <div className="mt-8 space-y-6">
                                             <div className="bg-muted/30 rounded-3xl p-6">
-                                                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-4 px-1">{t('your_benefits')}</p>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {pkg.classTypeId === "membership" && membershipCreditsByPackage[pkg.id] && (
-                                                        <>
-                                                            <span className="text-[10px] bg-card border border-primary/30 rounded-xl px-3 py-1.5 font-bold text-primary">Class credits left: {membershipCreditsByPackage[pkg.id].classRemaining}</span>
-                                                            <span className="text-[10px] bg-card border border-matcha/30 rounded-xl px-3 py-1.5 font-bold text-matcha">Recovery passes left: {membershipCreditsByPackage[pkg.id].recoveryRemaining}</span>
-                                                        </>
-                                                    )}
-                                                    {pkg.classTypeId !== "membership" && nonMembershipRecoveryBenefitsByPackage[pkg.id] && (
-                                                        <>
-                                                            {(nonMembershipRecoveryBenefitsByPackage[pkg.id].freeRecoveryRemaining || 0) > 0 && (
-                                                                <span className="text-[10px] bg-card border border-matcha/30 rounded-xl px-3 py-1.5 font-bold text-matcha">Free recovery left: {nonMembershipRecoveryBenefitsByPackage[pkg.id].freeRecoveryRemaining}</span>
-                                                            )}
-                                                            {(nonMembershipRecoveryBenefitsByPackage[pkg.id].discountPercent || 0) > 0 && (
-                                                                <span className="text-[10px] bg-card border border-primary/30 rounded-xl px-3 py-1.5 font-bold text-primary">Recovery discount {nonMembershipRecoveryBenefitsByPackage[pkg.id].discountPercent}% ({nonMembershipRecoveryBenefitsByPackage[pkg.id].discountedRecoveryRemaining} sessions)</span>
-                                                            )}
-                                                        </>
-                                                    )}
+                                                <div className="flex items-center gap-2 mb-4">
+                                                    <Info size={14} className="text-muted-foreground shrink-0" />
+                                                    <p className="text-[10px] font-black text-foreground uppercase tracking-widest">{t('your_benefits')}</p>
+                                                </div>
+                                                <div className="border-t border-border/60 pt-4 space-y-3">
                                                     {pkg.benefits?.map((benefit, i) => (
-                                                        <span key={i} className="text-[10px] bg-card border border-border/60 rounded-xl px-3 py-1.5 font-bold text-zen-dark/60">{benefit}</span>
+                                                        <div key={i} className="flex items-start gap-3">
+                                                            <Check size={18} className="text-green-600 shrink-0 mt-0.5" strokeWidth={2.5} />
+                                                            <span className="text-sm text-foreground/90 font-medium leading-snug">{benefit}</span>
+                                                        </div>
                                                     ))}
-                                                    <span className="text-[10px] bg-card border border-border/60 rounded-xl px-3 py-1.5 font-bold text-zen-dark/60">{t('lockers_access')}</span>
+                                                    <div className="flex items-start gap-3">
+                                                        <Check size={18} className="text-green-600 shrink-0 mt-0.5" strokeWidth={2.5} />
+                                                        <span className="text-sm text-foreground/90 font-medium leading-snug">{t('lockers_access')}</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div className="p-4 bg-accent/10 rounded-2xl border border-dashed border-primary/20">
@@ -602,6 +596,14 @@ const AccountPage: React.FC<AccountPageProps> = ({
                                     </div>
                                 </div>
                             ))}
+                            {activePkgs.length > visibleActivePackages && (
+                                <button
+                                    onClick={() => setVisibleActivePackages((v) => v + 3)}
+                                    className="w-full py-3 rounded-xl border border-border bg-card/70 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-card transition-colors"
+                                >
+                                    Load More
+                                </button>
+                            )}
                             {activePkgs.length === 0 && (
                                 <div className="py-12 bg-muted/10 rounded-3xl border border-dashed border-border text-center space-y-4">
                                     <p className="text-sm text-muted-foreground italic px-10">{t('no_active_packages_desc')}</p>
