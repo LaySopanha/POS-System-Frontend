@@ -75,6 +75,8 @@ export interface ApiScheduleDetail extends ApiSchedule {
     bookings: ApiBooking[];
 }
 
+import type { ApiUserPackage } from "./apiUserPackages";
+
 // ─── Query Keys ──────────────────────────────────────────────────────────────
 
 export const scheduleQueryKeys = {
@@ -82,9 +84,55 @@ export const scheduleQueryKeys = {
     list: (filters?: { service_type_id?: string; date?: string; from_date?: string }) =>
         [...scheduleQueryKeys.all, filters ?? {}] as const,
     detail: (id: string) => [...scheduleQueryKeys.all, "detail", id] as const,
+    adminBookings: (filters?: { date?: string; search?: string; status?: string }) =>
+        [...scheduleQueryKeys.all, "admin-bookings", filters ?? {}] as const,
 };
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
+
+export function useApiAdminBookings(filters?: { date?: string; search?: string; status?: string }) {
+    return useQuery({
+        queryKey: scheduleQueryKeys.adminBookings(filters),
+        queryFn: () => {
+            const params = new URLSearchParams();
+            if (filters?.date) params.set("date", filters.date);
+            if (filters?.search) params.set("search", filters.search);
+            if (filters?.status) params.set("status", filters.status);
+            const qs = params.toString();
+            const url = qs ? `/admin/wellness/bookings?${qs}` : "/admin/wellness/bookings";
+            return api.get<{ data: ApiBooking[] }>(url).then((r) => r.data);
+        },
+        staleTime: 15 * 1000,
+    });
+}
+
+export function useApiAdminUserPackages(userId: string | null) {
+    return useQuery({
+        queryKey: ["admin-user-packages", userId],
+        queryFn: () =>
+            api.get<{ data: ApiUserPackage[] }>(`/admin/wellness/users/${userId}/packages`).then((r) => r.data),
+        enabled: !!userId,
+    });
+}
+
+export interface AdminBookCustomerBody {
+    user_id: string;
+    schedule_id: string;
+    user_package_id: string;
+    force?: boolean;
+}
+
+export function useAdminBookCustomer() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (body: AdminBookCustomerBody) =>
+            api.post<{ data: ApiBooking }>("/admin/wellness/bookings", body),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: scheduleQueryKeys.all });
+            qc.invalidateQueries({ queryKey: ["admin-user-packages"] });
+        },
+    });
+}
 
 export function useApiSchedules(filters?: { service_type_id?: string; date?: string; from_date?: string }) {
     return useQuery({

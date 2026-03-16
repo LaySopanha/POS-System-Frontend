@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { Clock, Users, Calendar, AlertCircle, CheckCircle2, XCircle, UserX, Plus, Pencil, Loader2, Trash2, GripVertical } from "lucide-react";
+import { Clock, Users, Calendar, AlertCircle, CheckCircle2, XCircle, UserX, Plus, Pencil, Loader2, Trash2, GripVertical, Mail, Phone, Eye, Search, UserPlus } from "lucide-react";
 import { cn } from "@repo/ui";
 import { Button } from "@repo/ui";
 import { Skeleton } from "@repo/ui";
@@ -38,11 +38,17 @@ import {
   usePromoteWaitlistEntry,
   useRemoveWaitlistEntry,
   useReorderWaitlist,
+  useApiAdminBookings,
+  useApiAdminUserPackages,
+  useAdminBookCustomer,
+  useApiCustomers,
   type ApiSchedule,
   type ApiWaitlistEntry,
+  type ApiBooking,
 } from "@repo/store";
 import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui";
 import { Calendar as CalendarComponent } from "@repo/ui";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@repo/ui";
 import { addDays, addMonths, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, parseISO, startOfMonth, startOfWeek, subMonths } from "date-fns";
 
 const statusColors: Record<string, string> = {
@@ -53,11 +59,11 @@ const statusColors: Record<string, string> = {
 };
 
 const bookingStatusConfig: Record<string, { icon: typeof CheckCircle2; className: string; label: string }> = {
-  confirmed: { icon: CheckCircle2, className: "text-primary", label: "Confirmed" },
-  cancelled: { icon: XCircle, className: "text-destructive", label: "Cancelled" },
-  "late-cancel": { icon: XCircle, className: "text-orange-500", label: "Late Cancel" },
-  attended: { icon: CheckCircle2, className: "text-primary", label: "Attended" },
-  no_show: { icon: UserX, className: "text-muted-foreground", label: "No-Show" },
+  confirmed: { icon: CheckCircle2, className: "bg-emerald-50 text-emerald-700 border-emerald-100", label: "Confirmed" },
+  cancelled: { icon: XCircle, className: "bg-slate-50 text-slate-500 border-slate-100", label: "Cancelled" },
+  "late-cancel": { icon: XCircle, className: "bg-amber-50 text-amber-700 border-amber-100", label: "Late Cancel" },
+  attended: { icon: CheckCircle2, className: "bg-primary/10 text-primary border-primary/20", label: "Attended" },
+  no_show: { icon: UserX, className: "bg-rose-50 text-rose-700 border-rose-100", label: "No-Show" },
 };
 
 const canonicalServiceTypeLabel = (name?: string | null): string => {
@@ -73,6 +79,196 @@ const emptySlotForm = {
   serviceTypeId: "", instructorId: "", date: "",
   startTime: "09:00", endTime: "10:00", capacity: "10",
   locationNote: "", status: "available" as ApiSchedule["status"]
+};
+
+// ─── Manual Booking Dialog Component ─────────────────────────────────────────
+const ManualBookingDialog = ({ 
+  open, 
+  onOpenChange, 
+  initialScheduleId,
+  initialDate,
+  serviceTypes 
+}: { 
+  open: boolean; 
+  onOpenChange: (open: boolean) => void;
+  initialScheduleId?: string;
+  initialDate?: string;
+  serviceTypes: any[];
+}) => {
+  const [step, setStep] = useState<1 | 2>(1);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(initialScheduleId || null);
+  const [forceBooking, setForceBooking] = useState(false);
+
+  const { data: customersPage } = useApiCustomers(1); // Simplification: just first page for now
+  const customers = customersPage?.data ?? [];
+  
+  const filteredCustomers = customers.filter(c => {
+    const name = `${c.user.first_name ?? ""} ${c.user.last_name ?? ""}`.toLowerCase();
+    const email = c.user.email.toLowerCase();
+    const q = customerSearch.toLowerCase();
+    return name.includes(q) || email.includes(q);
+  });
+
+  const { data: userPackages = [], isLoading: packagesLoading } = useApiAdminUserPackages(selectedCustomerId);
+  const { data: schedules = [] } = useApiSchedules({ date: initialDate });
+  const bookCustomer = useAdminBookCustomer();
+
+  const handleBook = async () => {
+    if (!selectedCustomerId || !selectedScheduleId || !selectedPackageId) return;
+    try {
+      await bookCustomer.mutateAsync({
+        user_id: selectedCustomerId,
+        schedule_id: selectedScheduleId,
+        user_package_id: selectedPackageId,
+        force: forceBooking
+      });
+      toast.success("Customer booked successfully");
+      onOpenChange(false);
+      setStep(1);
+      setSelectedCustomerId(null);
+      setSelectedPackageId(null);
+    } catch (err: any) {
+      toast.error(err?.body?.message || "Failed to book customer");
+    }
+  };
+
+  const selectedCustomer = customers.find(c => c.user_id === selectedCustomerId);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Manual Booking</DialogTitle>
+        </DialogHeader>
+        
+        {step === 1 ? (
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Search Customer</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input 
+                  placeholder="Name or email..." 
+                  className="pl-9"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="max-h-[200px] overflow-y-auto rounded-lg border border-border divide-y divide-border">
+              {filteredCustomers.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedCustomerId(c.user_id)}
+                  className={cn(
+                    "w-full text-left px-4 py-2 text-sm transition-colors hover:bg-muted/50",
+                    selectedCustomerId === c.user_id && "bg-primary/5 text-primary font-medium"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>{c.user.first_name} {c.user.last_name}</span>
+                    <span className="text-[10px] text-muted-foreground">{c.user.email}</span>
+                  </div>
+                </button>
+              ))}
+              {filteredCustomers.length === 0 && (
+                <div className="p-4 text-center text-xs text-muted-foreground">No customers found</div>
+              )}
+            </div>
+
+            {selectedCustomerId && (
+              <div className="space-y-2 pt-2 animate-in fade-in slide-in-from-top-2">
+                <Label>Select Package</Label>
+                {packagesLoading ? (
+                  <Skeleton className="h-10 w-full" />
+                ) : (
+                  <Select value={selectedPackageId || ""} onValueChange={setSelectedPackageId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a valid package" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {userPackages.map(up => (
+                        <SelectItem key={up.id} value={up.id}>
+                          {up.package?.name} ({up.sessions_remaining ?? "∞"} left)
+                        </SelectItem>
+                      ))}
+                      {userPackages.length === 0 && (
+                        <div className="p-2 text-center text-xs text-muted-foreground">No active packages found</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4 py-4">
+            <div className="rounded-lg bg-muted/30 p-3 space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Customer</span>
+                <span className="font-medium text-foreground">{selectedCustomer?.user.first_name} {selectedCustomer?.user.last_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Package</span>
+                <span className="font-medium text-foreground">
+                  {userPackages.find(p => p.id === selectedPackageId)?.package?.name}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Select Session</Label>
+              <Select value={selectedScheduleId || ""} onValueChange={setSelectedScheduleId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a class slot" />
+                </SelectTrigger>
+                <SelectContent>
+                  {schedules.map(s => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.start_time.slice(0, 5)} - {canonicalServiceTypeLabel(s.service_type?.name)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center space-x-2 pt-2">
+              <input 
+                type="checkbox" 
+                id="force" 
+                checked={forceBooking} 
+                onChange={(e) => setForceBooking(e.target.checked)}
+                className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+              />
+              <label htmlFor="force" className="text-xs font-medium text-foreground cursor-pointer">
+                Force booking even if class is full
+              </label>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          {step === 1 ? (
+            <Button disabled={!selectedPackageId} onClick={() => setStep(2)}>Next</Button>
+          ) : (
+            <Button 
+              disabled={!selectedScheduleId || bookCustomer.isPending} 
+              onClick={handleBook}
+              className="gap-2"
+            >
+              {bookCustomer.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Confirm Booking
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 };
 
 // ─── Drag-and-drop sortable row for the waitlist queue ──────────────────────
@@ -141,12 +337,16 @@ const ClassesPage = () => {
   const { data: serviceTypes = [] } = useApiServiceTypes();
   const { data: instructors = [] } = useApiInstructors();
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
-  const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
+  const [selectedDate, setSelectedDate] = useState<string | undefined>(today);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [viewTab, setViewTab] = useState<"schedule" | "reservations" | "calendar">("schedule");
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  
+  const [bookingSearch, setBookingSearch] = useState("");
+  const [bookingStatusFilter, setBookingStatusFilter] = useState("all");
+  const [showManualBooking, setShowManualBooking] = useState(false);
 
   const calendarMonthStart = useMemo(() => startOfMonth(calendarMonth), [calendarMonth]);
   const calendarMonthEnd = useMemo(() => endOfMonth(calendarMonth), [calendarMonth]);
@@ -162,6 +362,12 @@ const ClassesPage = () => {
   const { data: allSchedules = [], isLoading: schedulesLoading } = useApiSchedules(
     scheduleFilters
   );
+
+  const { data: adminBookings = [], isLoading: adminBookingsLoading } = useApiAdminBookings({
+    date: selectedDate,
+    search: bookingSearch,
+    status: bookingStatusFilter === "all" ? undefined : bookingStatusFilter
+  });
 
   const filteredSchedules = useMemo(() => {
     return allSchedules.filter((s) => {
@@ -399,6 +605,13 @@ const ClassesPage = () => {
 
   return (
     <div className="space-y-6">
+      <ManualBookingDialog 
+        open={showManualBooking}
+        onOpenChange={setShowManualBooking}
+        initialDate={selectedDate}
+        serviceTypes={serviceTypes}
+      />
+
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
         <div className="rounded-xl bg-card border border-border p-4">
@@ -446,13 +659,18 @@ const ClassesPage = () => {
                     : "bg-card text-muted-foreground border-border hover:bg-muted"
                 )}
               >
-                {tab === "schedule" ? "Class Schedule" : tab === "reservations" ? "Bookings" : "Calendar"}
+                {tab === "schedule" ? "Class Schedule" : tab === "reservations" ? "Wellness Bookings" : "Calendar"}
               </button>
             ))}
           </div>
           <Button size="sm" onClick={openAddSlot} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" /> Add Session
           </Button>
+          {viewTab === "reservations" && (
+            <Button size="sm" variant="outline" onClick={() => setShowManualBooking(true)} className="gap-1.5 border-primary/20 text-primary hover:bg-primary/5">
+              <UserPlus className="h-3.5 w-3.5" /> Manual Booking
+            </Button>
+          )}
         </div>
         
         <div className="flex items-center gap-1.5 ml-auto">
@@ -659,206 +877,303 @@ const ClassesPage = () => {
           </div>
         </div>
       ) : (
-        /* Bookings view — show all bookings for schedules on this date */
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Customer</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Session</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Time</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Booked</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSchedules.flatMap((s) =>
-                (s.bookings ?? []).map((b) => {
-                  const StatusIcon = bookingStatusConfig[b.status]?.icon || AlertCircle;
-                  const userName = b.user ? `${b.user.first_name ?? ""} ${b.user.last_name ?? ""}`.trim() || b.user.email : "—";
-                  return (
-                    <tr key={b.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3 text-sm font-medium text-foreground">{userName}</td>
-                      <td className="px-4 py-3 text-sm text-foreground">{canonicalServiceTypeLabel(s.service_type?.name)}</td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{s.start_time.slice(0, 5)}</td>
-                      <td className="px-4 py-3">
-                        <div className={cn("flex items-center gap-1.5 text-xs font-semibold capitalize", bookingStatusConfig[b.status]?.className)}>
-                          <StatusIcon className="h-3.5 w-3.5" />
-                          {b.status.replace("_", " ")}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">
-                        {new Date(b.booked_at).toLocaleDateString([], { month: "short", day: "numeric" })}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-          {filteredSchedules.flatMap(s => s.bookings ?? []).length === 0 && (
-            <div className="py-12 text-center text-sm text-muted-foreground">No bookings found with current filters</div>
-          )}
+        /* Wellness Booking Management Dashboard */
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+             <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input 
+                  placeholder="Search bookings by customer..." 
+                  className="pl-9 h-9"
+                  value={bookingSearch}
+                  onChange={(e) => setBookingSearch(e.target.value)}
+                />
+             </div>
+             <Select value={bookingStatusFilter} onValueChange={setBookingStatusFilter}>
+                <SelectTrigger className="h-9 w-[150px] text-xs">
+                  <SelectValue placeholder="Status: All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Status: All</SelectItem>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                  <SelectItem value="attended">Attended</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="no_show">No-Show</SelectItem>
+                </SelectContent>
+             </Select>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Customer</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Session Info</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Booking Ref</th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {adminBookingsLoading ? (
+                  [...Array(5)].map((_, i) => (
+                    <tr key={i}><td colSpan={5} className="px-6 py-4"><Skeleton className="h-8 w-full" /></td></tr>
+                  ))
+                ) : (
+                  adminBookings.map((b: ApiBooking) => {
+                    const StatusIcon = bookingStatusConfig[b.status]?.icon || AlertCircle;
+                    const userName = b.user ? `${b.user.first_name ?? ""} ${b.user.last_name ?? ""}`.trim() || b.user.email : "—";
+                    return (
+                      <tr key={b.id} className="group hover:bg-muted/30 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-foreground text-[14px]">{userName}</span>
+                            <div className="flex items-center gap-3 mt-1">
+                              {b.user?.email && (
+                                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <Mail className="h-3 w-3" />
+                                  {b.user.email}
+                                </div>
+                              )}
+                              {b.user?.phone && (
+                                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <Phone className="h-3 w-3" />
+                                  {b.user.phone}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-foreground text-sm">
+                            {canonicalServiceTypeLabel(b.schedule?.service_type?.name)}
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+                            <Clock className="h-3 w-3" />
+                            <span>{b.schedule?.start_time.slice(0, 5)} - {b.schedule?.end_time.slice(0, 5)}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className={cn(
+                            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold tracking-wider capitalize",
+                            bookingStatusConfig[b.status]?.className
+                          )}>
+                            <StatusIcon className="h-3.5 w-3.5" />
+                            {bookingStatusConfig[b.status]?.label || b.status.replace("_", " ")}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-mono text-xs text-muted-foreground">{b.booking_reference}</span>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                             Booked: {format(new Date(b.booked_at), "d MMM, HH:mm")}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                            {b.status === "confirmed" && (
+                              <Button 
+                                size="sm" 
+                                className="h-8 px-3 text-[10px] font-bold"
+                                onClick={() => handleAttendanceUpdate(b.id, "attended")}
+                              >
+                                Check In
+                              </Button>
+                            )}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                  onClick={() => setSelectedClassId(b.schedule_id)}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>View Class Details</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+                {!adminBookingsLoading && adminBookings.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-16 text-center text-sm text-muted-foreground">
+                      No bookings found for the selected criteria.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {/* Class detail dialog with attendee management */}
       <Dialog open={!!selectedClassId && !!selectedClass} onOpenChange={() => setSelectedClassId(null)}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
-          {selectedClass && (() => {
-            return (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    {canonicalServiceTypeLabel(selectedClass.service_type?.name)}
-                    <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", statusColors[selectedClass.status])}>
-                      {selectedClass.status.replace("_", " ")}
-                    </span>
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Instructor</span><span className="font-medium text-foreground">{getInstructorName(selectedClass)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Time</span><span className="font-medium text-foreground">{selectedClass.start_time.slice(0, 5)}–{selectedClass.end_time.slice(0, 5)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Capacity</span><span className="font-medium text-foreground">{selectedClass.booked_count}/{selectedClass.max_capacity}</span></div>
-                    {selectedClass.location_note && (
-                      <div className="flex justify-between"><span className="text-muted-foreground">Location</span><span className="font-medium text-foreground">{selectedClass.location_note}</span></div>
-                    )}
-                  </div>
-
-                  {/* Action buttons */}
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openEditSlot(selectedClass)}>
-                      <Pencil className="h-3.5 w-3.5" /> Edit Details
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
+          {selectedClass && (
+            <>
+              <div className="bg-primary/5 p-6 pb-4 border-b border-primary/10">
+                <DialogHeader className="p-0">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold uppercase tracking-widest bg-primary text-primary-foreground px-2 py-0.5 rounded text-[10px]">
+                          {canonicalServiceTypeLabel(selectedClass.service_type?.name)}
+                        </span>
+                        <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider", statusColors[selectedClass.status])}>
+                          {selectedClass.status.replace("_", " ")}
+                        </span>
+                      </div>
+                      <DialogTitle className="text-2xl font-display font-bold">
+                        {selectedClass.start_time.slice(0, 5)} - {selectedClass.end_time.slice(0, 5)} Session
+                      </DialogTitle>
+                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground font-medium">
+                        <div className="flex items-center gap-1.5"><Calendar className="h-4 w-4" /> {format(new Date(selectedClass.class_date), "EEEE, MMM d")}</div>
+                        <div className="flex items-center gap-1.5"><Users className="h-4 w-4" /> {selectedClass.booked_count}/{selectedClass.max_capacity} Enrolled</div>
+                        <div className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> {getInstructorName(selectedClass)}</div>
+                      </div>
+                    </div>
+                    <Button onClick={() => setShowManualBooking(true)} size="sm" className="gap-2 shadow-sm">
+                      <UserPlus className="h-4 w-4" /> Book Customer
                     </Button>
                   </div>
+                </DialogHeader>
+              </div>
 
-                  {/* Confirmed attendees */}
-                  {confirmed.length > 0 && (
-                    <div className="border-t border-border pt-3">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                        Attendees ({confirmed.length})
-                      </p>
-                      <div className="space-y-1.5">
-                        {confirmed.map((r) => {
-                          const name = r.user ? `${r.user.first_name ?? ""} ${r.user.last_name ?? ""}`.trim() || r.user.email : "—";
-                          return (
-                            <div key={r.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
-                              <span className="text-sm text-foreground">{name}</span>
-                              <div className="flex items-center gap-2">
-                                <span className={cn("text-xs font-semibold capitalize", bookingStatusConfig[r.status]?.className)}>
-                                  {r.status.replace("_", " ")}
-                                </span>
-                                {r.status === "confirmed" && (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 px-2 text-[10px]"
-                                      disabled={updateBookingAttendance.isPending}
-                                      onClick={() => handleAttendanceUpdate(r.id, "attended")}
-                                    >
-                                      Attended
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 px-2 text-[10px]"
-                                      disabled={updateBookingAttendance.isPending}
-                                      onClick={() => handleAttendanceUpdate(r.id, "no_show")}
-                                    >
-                                      No-show
-                                    </Button>
-                                  </>
-                                )}
+              <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+                {/* Attendees Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      Confirmed Attendees ({confirmed.length})
+                    </h3>
+                    <div className="text-[10px] font-medium text-muted-foreground">
+                      {confirmed.filter(a => a.status === "attended").length} Checked In
+                    </div>
+                  </div>
+                  
+                  <div className="rounded-xl border border-border divide-y divide-border bg-muted/5 overflow-hidden">
+                    {confirmed.map((b) => {
+                      const StatusIcon = bookingStatusConfig[b.status]?.icon || CheckCircle2;
+                      return (
+                        <div key={b.id} className="flex items-center justify-between p-4 bg-card transition-colors hover:bg-muted/30">
+                          <div className="flex items-center gap-3">
+                            <div className={cn("h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm", b.status === "attended" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                              {b.user?.first_name?.[0] || "?"}
+                            </div>
+                            <div>
+                              <div className="font-bold text-sm flex items-center gap-2">
+                                {b.user?.first_name} {b.user?.last_name}
+                                {b.status === "attended" && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
+                              </div>
+                              <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+                                <span className="font-mono">{b.booking_reference}</span>
+                                <span>·</span>
+                                <span>{b.user_package?.package?.name || "No Package"}</span>
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Cancelled / No-shows */}
-                  {cancelled.length > 0 && (
-                    <div className="border-t border-border pt-3">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                        Cancelled / No-Shows ({cancelled.length})
-                      </p>
-                      <div className="space-y-1.5">
-                        {cancelled.map((r) => {
-                          const StatusIcon = bookingStatusConfig[r.status]?.icon || AlertCircle;
-                          const name = r.user ? `${r.user.first_name ?? ""} ${r.user.last_name ?? ""}`.trim() || r.user.email : "—";
-                          return (
-                            <div key={r.id} className="flex items-center justify-between rounded-lg bg-muted/20 px-3 py-2 opacity-60">
-                              <span className="text-sm text-foreground">{name}</span>
-                              <div className="flex items-center gap-2">
-                                <div className={cn("flex items-center gap-1 text-xs font-semibold capitalize", bookingStatusConfig[r.status]?.className)}>
-                                  <StatusIcon className="h-3 w-3" />
-                                  {r.status.replace("_", " ")}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Waitlist */}
-                  <div className="border-t border-border pt-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                      Waitlist ({waitingQueue.length})
-                    </p>
-                    {reorderWaitlist.isPending && (
-                      <p className="text-[10px] text-muted-foreground mb-1 flex items-center gap-1">
-                        <Loader2 className="h-3 w-3 animate-spin" /> Saving order…
-                      </p>
-                    )}
-                    {waitingQueue.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-1">No customers on the waitlist.</p>
-                    ) : (
-                      <DndContext
-                        sensors={dndSensors}
-                        collisionDetection={closestCenter}
-                        onDragEnd={handleWaitlistDragEnd}
-                      >
-                        <SortableContext
-                          items={waitingQueue.map((e) => e.id)}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          <div className="space-y-1.5">
-                            {waitingQueue.map((entry) => {
-                              const name = entry.user
-                                ? `${entry.user.first_name ?? ""} ${entry.user.last_name ?? ""}`.trim() || entry.user.email
-                                : "—";
-                              return (
-                                <WaitlistSortableRow
-                                  key={entry.id}
-                                  entry={entry}
-                                  name={name}
-                                  onPromote={() => handlePromoteWaitlist(entry.id)}
-                                  onRemove={() => handleRemoveWaitlist(entry.id)}
-                                  promoteDisabled={promoteWaitlistEntry.isPending}
-                                  removeDisabled={removeWaitlistEntry.isPending}
-                                />
-                              );
-                            })}
                           </div>
-                        </SortableContext>
-                      </DndContext>
+                          
+                          <div className="flex items-center gap-2">
+                            {b.status === "confirmed" ? (
+                              <>
+                                <Button 
+                                  size="sm" 
+                                  className="h-8 px-3 text-[11px] font-bold gap-1.5" 
+                                  onClick={() => handleAttendanceUpdate(b.id, "attended")}
+                                >
+                                  Check In
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="h-8 px-3 text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-100" 
+                                  onClick={() => handleAttendanceUpdate(b.id, "no_show")}
+                                >
+                                  No-Show
+                                </Button>
+                              </>
+                            ) : (
+                              <div className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold border", bookingStatusConfig[b.status]?.className)}>
+                                <StatusIcon className="h-3.5 w-3.5" />
+                                {bookingStatusConfig[b.status]?.label}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {confirmed.length === 0 && (
+                      <div className="p-8 text-center text-sm text-muted-foreground italic">No confirmed bookings yet</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Waitlist Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-amber-500" />
+                      Waitlist Queue ({waitingQueue.length})
+                    </h3>
+                    {waitingQueue.length > 0 && (
+                      <span className="text-[10px] text-muted-foreground italic">Drag handle to reorder</span>
                     )}
                   </div>
 
-                  {bookings.length === 0 && (
-                    <div className="border-t border-border pt-3">
-                      <p className="text-center text-sm text-muted-foreground py-4">No attendees yet</p>
-                    </div>
-                  )}
+                  <div className="rounded-xl border border-border bg-muted/5 p-4">
+                    <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleWaitlistDragEnd}>
+                      <SortableContext items={waitingQueue.map(e => e.id)} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-2">
+                          {waitingQueue.map((entry) => (
+                            <WaitlistSortableRow
+                              key={entry.id}
+                              entry={entry}
+                              name={`${entry.user?.first_name ?? ""} ${entry.user?.last_name ?? ""}`.trim() || entry.user?.email || "Unknown User"}
+                              onPromote={() => handlePromoteWaitlist(entry.id)}
+                              onRemove={() => handleRemoveWaitlist(entry.id)}
+                              promoteDisabled={promoteWaitlistEntry.isPending || selectedClass.booked_count >= selectedClass.max_capacity}
+                              removeDisabled={removeWaitlistEntry.isPending}
+                            />
+                          ))}
+                          {waitingQueue.length === 0 && (
+                            <div className="py-4 text-center text-sm text-muted-foreground italic bg-card rounded-lg border border-dashed border-border">
+                              The waitlist is currently empty
+                            </div>
+                          )}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  </div>
                 </div>
-              </>
-            );
-          })()}
+
+                {/* Cancelled/No-Show Section */}
+                {cancelled.length > 0 && (
+                  <div className="space-y-4 pt-4 border-t border-border/50">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/60">Cancelled / No-Shows ({cancelled.length})</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {cancelled.map(b => (
+                        <div key={b.id} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border text-[11px] text-muted-foreground">
+                          <span className="font-bold">{b.user?.first_name} {b.user?.last_name}</span>
+                          <span className="opacity-50">·</span>
+                          <span className="uppercase text-[9px] font-black tracking-tighter">{b.status.replace("-", " ")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-6 bg-muted/30 border-t border-border flex justify-end">
+                <Button variant="outline" onClick={() => setSelectedClassId(null)}>Close Management View</Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
