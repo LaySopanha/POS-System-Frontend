@@ -309,7 +309,7 @@ const PackageManagement = () => {
             <Crown className="inline h-3 w-3 mr-1" /> Memberships
           </button>
           <button onClick={() => setTab("service-types")} className={cn("rounded-full px-4 py-1.5 text-xs font-medium transition-colors border", tab === "service-types" ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:bg-muted")}>
-            <Dumbbell className="inline h-3 w-3 mr-1" /> Service Types
+            <Dumbbell className="inline h-3 w-3 mr-1" /> Class Types
           </button>
         </div>
         {tab !== "service-types" && (
@@ -319,7 +319,7 @@ const PackageManagement = () => {
         )}
         {tab === "service-types" && (
           <Button onClick={openNewSvcType} className="gap-2">
-            <Plus className="h-4 w-4" /> Add Service Type
+            <Plus className="h-4 w-4" /> Add Class Type
           </Button>
         )}
       </div>
@@ -520,7 +520,7 @@ const PackageManagement = () => {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Package Name</Label><Input value={pkgForm.name} onChange={e => setPkgForm(f => ({ ...f, name: e.target.value }))} placeholder="Move 6" /></div>
-              <div className="space-y-1.5"><Label>Service Type</Label>
+              <div className="space-y-1.5"><Label>Class Type</Label>
                 <Select value={pkgForm.serviceTypeId} onValueChange={v => setPkgForm(f => ({ ...f, serviceTypeId: v }))}>
                   <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                   <SelectContent>{serviceTypes.map(st => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}</SelectContent>
@@ -555,7 +555,7 @@ const PackageManagement = () => {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Plan Name</Label><Input value={memForm.name} onChange={e => setMemForm(f => ({ ...f, name: e.target.value }))} placeholder="Move & Recover" /></div>
-              <div className="space-y-1.5"><Label>Service Type</Label>
+              <div className="space-y-1.5"><Label>Class Type</Label>
                 <Select value={memForm.serviceTypeId} onValueChange={v => setMemForm(f => ({ ...f, serviceTypeId: v }))}>
                   <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                   <SelectContent>{serviceTypes.map(st => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}</SelectContent>
@@ -585,7 +585,7 @@ const PackageManagement = () => {
       {/* Service Type Dialog */}
       <Dialog open={!!editSvcType || isNewSvcType} onOpenChange={closeSvcTypeDialog}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editSvcType ? "Edit Service Type" : "Add Service Type"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editSvcType ? "Edit Class Type" : "Add Class Type"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Name</Label>

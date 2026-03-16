@@ -52,6 +52,7 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
     const { data: staff = [], isLoading: loading } = useApiStaff();
     
     const [searchQuery, setSearchQuery] = useState("");
+    const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("active");
     const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false);
     const [editingStaff, setEditingStaff] = useState<ApiStaffMember | null>(null);
     const [saving, setSaving] = useState(false);
@@ -72,7 +73,13 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
     const filteredStaff = staff.filter(s => {
         const fullName = `${s.first_name ?? ""} ${s.last_name ?? ""}`.toLowerCase();
         const q = searchQuery.toLowerCase();
-        return fullName.includes(q) || s.email.toLowerCase().includes(q);
+        const matchesSearch = fullName.includes(q) || s.email.toLowerCase().includes(q);
+        
+        const matchesStatus = statusFilter === "all" 
+            || (statusFilter === "active" && s.is_active)
+            || (statusFilter === "inactive" && !s.is_active);
+            
+        return matchesSearch && matchesStatus;
     });
 
     // Count active admins so we can protect the last one
@@ -207,6 +214,41 @@ const StaffManagement = ({ currentUserId = null }: StaffManagementProps) => {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
+                </div>
+                <div className="flex items-center gap-1 rounded-lg border border-border p-1 bg-muted/30">
+                    <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setStatusFilter("active")}
+                        className={cn(
+                            "h-8 px-3 text-xs font-medium transition-all",
+                            statusFilter === "active" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                        )}
+                    >
+                        Active
+                    </Button>
+                    <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setStatusFilter("inactive")}
+                        className={cn(
+                            "h-8 px-3 text-xs font-medium transition-all",
+                            statusFilter === "inactive" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                        )}
+                    >
+                        Inactive
+                    </Button>
+                    <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setStatusFilter("all")}
+                        className={cn(
+                            "h-8 px-3 text-xs font-medium transition-all",
+                            statusFilter === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                        )}
+                    >
+                        All
+                    </Button>
                 </div>
             </div>
 
